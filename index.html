@@ -468,6 +468,9 @@ const CONFIG = {
   // data/qualtrics.csv is counted on this date (the day the file was exported). Update it with each new file,
   // or add a response date column to the export and this setting is ignored.
   qualtricsNoDateAs: "2026-10-30",
+  // When data/roster.csv is loaded, only agents on it appear. Everyone else in TSS, QA, Intercom or Qualtrics is left out
+  // and listed under Name Matching Review on the Data & Settings tab. Set to false to show everyone again.
+  rosterOnly: true,
 };
 
 /* ---- carried over from the TSS Agent Time dashboard ---- */
@@ -612,6 +615,10 @@ function buildMatcher(){
 function matchBatch(source, names, brandOf){
   const m=buildMatcher(), res=new Map();
   names.forEach(n=>res.set(n,m(n,brandOf?brandOf(n):"")));
+  // a first-name-only match may not take an agent that another spelling already matched more strongly
+  const strong=new Map(); res.forEach((r,n)=>{ if(r.agent && !/^first name only/.test(r.method)) strong.set(r.agent.key,n); });
+  res.forEach((r,n)=>{ if(r.agent && /^first name only/.test(r.method) && strong.has(r.agent.key)){
+    r.method="not matched: first name only, and "+r.agent.name+" already matches \""+strong.get(r.agent.key)+"\""; r.agent=null; } });
   const claimed=new Set([...res.values()].filter(r=>r.agent).map(r=>r.agent.key));
   res.forEach((r,n)=>{ if(r.method==="ambiguous"){
     const left=r.cands.filter(a=>!claimed.has(a.key));
@@ -916,22 +923,27 @@ function buildModel(){
   S.roster.forEach(r=>{ const a=upsertAgent(r.name,{source:"Roster",brand:r.brand,coach:r.coach,location:r.location,trainingEnd:r.trainingEnd,force:true}); r.aliases.forEach(x=>a.aliases.add(x)); });
   // 2. TSS (full names from 8x8)
   const tssLatest=new Map(); S.tss.slice().sort((x,y)=>x.date<y.date?-1:1).forEach(r=>tssLatest.set(norm(r.agent),r));
-  const m0=buildMatcher();
+  // Roster-only mode: once a roster is loaded, it is the official list. Anyone in the data who is not on it is left out.
+  const RO = CONFIG.rosterOnly && S.roster.length>0;
+  const m0=buildMatcher(), tssKey=new Map();
   tssLatest.forEach((r,k)=>{
     const brand=/keap/i.test(r.group)?"Keap":"Thryv";
     const hit=S.roster.length?m0(r.agent):{agent:null};
+    if(RO && (!hit.agent || /^first name/.test(hit.method))){ tssKey.set(k,null);
+      S.match.push({src:"TSS",raw:r.agent,to:"",method:"not on roster (left out)",n:S.tss.filter(x=>norm(x.agent)===k).length}); return; }
     const target=hit.agent?hit.agent.name:r.agent;
     const ta=upsertAgent(target,{source:"TSS",brand,location:r.location,coach:brand==="Keap"?keapCoach(r.agent):coachFromGroup(r.group)});
-    if(ta) ta.group=r.group;
+    if(ta){ ta.group=r.group; tssKey.set(k,ta.key); }
     if(hit.agent && hit.method!=="exact") S.match.push({src:"TSS",raw:r.agent,to:hit.agent.name,method:hit.method,n:1});
   });
-  const tssKey=new Map(); { const m=buildMatcher(); tssLatest.forEach((r,k)=>{ const h=m(r.agent); tssKey.set(k,h.agent?h.agent.key:k); }); }
-  S.tss.forEach(r=>r.akey=tssKey.get(norm(r.agent))||norm(r.agent));
+  S.tss.forEach(r=>r.akey=tssKey.has(norm(r.agent))?tssKey.get(norm(r.agent)):norm(r.agent));
   // 3. QA names: match to TSS/roster, otherwise create
   { const names=[...new Set(S.qa.map(r=>r.agent))]; const brandOf=n=>{const r=S.qa.find(x=>x.agent===n);return r?r.brand:"";};
     const res=matchBatch("QA",names,brandOf);
     names.forEach(n=>{ const h=res.get(n); const rec=S.qa.find(x=>x.agent===n);
       let a=h.agent;
+      if(RO && (!a || h.method.startsWith("first name"))){ S.qa.filter(x=>x.agent===n).forEach(x=>x.akey=null);
+        S.match.push({src:rec.brand+" QA",raw:n,to:"",method:"not on roster (left out)",n:S.qa.filter(x=>x.agent===n).length}); return; }
       if(!a || h.method.startsWith("first name")){ a=upsertAgent(n,{source:"QA",brand:rec.brand}); }
       else if(h.method!=="exact") S.match.push({src:rec.brand+" QA",raw:n,to:a.name,method:h.method,n:S.qa.filter(x=>x.agent===n).length});
       a.sources.add("QA");
