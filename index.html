@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Support KPI Scorecard · TSS &amp; Keap</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --orange:#ff5000; --orange-soft:#fff1ea;
+    --green:#1f9d55; --green-soft:#e7f6ee;
+    --red:#d64545; --red-soft:#fbeaea;
+    --amber:#f0a020; --amber-soft:#fdf3e2;
+    --blue:#3d7bd6; --blue-soft:#eaf1fb;
+    --ink:#1d2733; --muted:#6b7683; --line:#e7ebf0; --bg:#f4f5f7; --card:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1240px;margin:0 auto;padding:26px 22px 60px;}
+  .head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:16px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:flex-start;gap:16px;}
+  .logo{font-weight:800;font-size:26px;color:var(--orange);letter-spacing:-.5px;line-height:1;margin-top:4px;}
+  .logo-img{height:34px;width:auto;display:block;margin-top:3px;}
+  h1{font-size:22px;margin:0 0 3px;font-weight:700;letter-spacing:-.2px;}
+  .sub{color:var(--muted);font-size:13.5px;margin:0;}
+  .updated{color:var(--green);font-size:12.5px;margin:6px 0 0;font-weight:600;}
+  .updated.warn{color:#b9770a;}
+  .head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .loaded{color:var(--muted);font-size:12px;text-align:right;max-width:280px;}
+  button.btn,label.btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 14px;
+    font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;transition:.15s;display:inline-block;}
+  button.btn:hover,label.btn:hover{border-color:#cbd3dc;background:#fbfcfd;}
+  /* tabs */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto;}
+  .tabs button{border:0;background:transparent;padding:11px 16px;font-size:13.5px;font-weight:700;color:var(--muted);
+    cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;}
+  .tabs button.on{color:var(--ink);border-bottom-color:var(--orange);}
+  /* filter bar */
+  .filters{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:16px 18px;display:flex;flex-wrap:wrap;gap:16px 20px;align-items:flex-end;margin-bottom:18px;
+    box-shadow:0 1px 2px rgba(20,30,45,.04);}
+  .fld{display:flex;flex-direction:column;gap:6px;}
+  .fld label{font-size:10.5px;letter-spacing:.6px;color:var(--muted);font-weight:700;text-transform:uppercase;}
+  select{border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 11px;font-size:13.5px;
+    background:#fff;color:var(--ink);min-width:140px;cursor:pointer;-webkit-appearance:none;appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7683' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center;}
+  .spacer{flex:1;}
+  /* multi-select (same pattern as the QA dashboards) */
+  .ms{position:relative;}
+  .ms-btn{border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 11px;font-size:13.5px;
+    background:#fff;color:var(--ink);min-width:140px;max-width:220px;text-align:left;cursor:pointer;position:relative;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ms-btn.active{border-color:var(--orange);background:var(--orange-soft);}
+  .ms-btn::after{content:"";position:absolute;right:10px;top:50%;width:12px;height:12px;transform:translateY(-50%);
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7683' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;}
+  .ms-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:30;background:#fff;border:1px solid var(--line);
+    border-radius:10px;box-shadow:0 8px 24px rgba(20,30,45,.14);padding:8px;min-width:210px;max-height:320px;overflow:auto;}
+  .ms-panel label{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;
+    color:var(--ink);text-transform:none;letter-spacing:0;font-weight:500;cursor:pointer;white-space:nowrap;}
+  .ms-panel label:hover{background:#f5f7f9;}
+  .ms-panel .ms-all{border-bottom:1px solid var(--line);margin-bottom:4px;padding-bottom:8px;font-weight:700;}
+  .ms-panel input[type=checkbox]{width:15px;height:15px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;}
+  .ms-search{width:100%;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:13px;margin-bottom:6px;}
+  .clearall{border:0;background:none;color:var(--orange);font-weight:700;font-size:12.5px;cursor:pointer;padding:8px 4px;}
+  /* hero */
+  .hero{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;
+    margin-bottom:16px;display:flex;align-items:center;gap:26px;box-shadow:0 1px 2px rgba(20,30,45,.04);flex-wrap:wrap;}
+  .hero .kpi{min-width:210px;}
+  .klabel{font-size:11px;letter-spacing:.6px;color:var(--muted);font-weight:700;text-transform:uppercase;}
+  .kval{font-size:44px;font-weight:800;line-height:1.05;margin:4px 0 2px;letter-spacing:-1px;}
+  .kdesc{font-size:12.5px;color:var(--muted);}
+  .bar-wrap{flex:1;position:relative;min-width:220px;}
+  .bar-track{height:14px;background:#eef1f4;border-radius:20px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:20px;transition:width .5s;}
+  .goal-mark{position:absolute;top:-6px;transform:translateX(-50%);text-align:center;}
+  .goal-line{width:2px;height:26px;background:var(--ink);margin:0 auto;}
+  .goal-txt{font-size:11px;font-weight:700;color:var(--ink);margin-top:2px;white-space:nowrap;}
+  .pill{flex-shrink:0;padding:9px 16px;border-radius:20px;font-size:13.5px;font-weight:700;}
+  .pill.under{background:var(--red-soft);color:var(--red);}
+  .pill.over{background:var(--green-soft);color:var(--green);}
+  .pill.close{background:var(--amber-soft);color:#b9770a;}
+  /* pillar cards */
+  .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
+  .pillar{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;
+    box-shadow:0 1px 2px rgba(20,30,45,.04);border-top:4px solid var(--blue);}
+  .pillar .pw{float:right;font-size:11px;font-weight:700;color:var(--muted);background:#f1f3f6;border-radius:6px;padding:3px 7px;}
+  .pillar .pv{font-size:30px;font-weight:800;margin:8px 0 2px;letter-spacing:-.6px;}
+  .pillar .pd{font-size:12px;color:var(--muted);line-height:1.45;}
+  .pillar .mini{height:8px;background:#eef1f4;border-radius:10px;overflow:hidden;margin-top:10px;}
+  .pillar .mini div{height:100%;border-radius:10px;}
+  /* stat cards */
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:15px 16px;
+    box-shadow:0 1px 2px rgba(20,30,45,.04);}
+  .stat .top{display:flex;align-items:center;justify-content:space-between;}
+  .stat .slabel{font-size:11px;letter-spacing:.4px;color:var(--muted);font-weight:700;text-transform:uppercase;}
+  .dot{width:9px;height:9px;border-radius:50%;}
+  .stat .sval{font-size:24px;font-weight:800;margin:8px 0 2px;letter-spacing:-.5px;}
+  .stat .sdesc{font-size:11.5px;color:var(--muted);}
+  /* panels */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;
+    margin-bottom:16px;box-shadow:0 1px 2px rgba(20,30,45,.04);}
+  .panel h2{font-size:16px;margin:0 0 2px;font-weight:700;}
+  .panel .pdesc{font-size:12.5px;color:var(--muted);margin:0 0 16px;line-height:1.5;}
+  .grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px;}
+  .grid2 .panel{margin-bottom:0;}
+  .grid2e{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+  .grid2e .panel{margin-bottom:0;}
+  .chartbox{position:relative;}
+  .scrollchart{max-height:640px;overflow-y:auto;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  th{font-size:10.5px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;font-weight:700;cursor:pointer;user-select:none;white-space:nowrap;}
+  th:hover{color:var(--ink);}
+  th.nosort{cursor:default;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .tblwrap{overflow-x:auto;max-height:720px;overflow-y:auto;}
+  .tblwrap thead th{position:sticky;top:0;background:#fff;z-index:1;}
+  .badge{display:inline-block;min-width:46px;text-align:center;padding:3px 8px;border-radius:7px;font-weight:700;font-size:12px;white-space:nowrap;}
+  .b-green{background:var(--green-soft);color:var(--green);}
+  .b-amber{background:var(--amber-soft);color:#b9770a;}
+  .b-red{background:var(--red-soft);color:var(--red);}
+  .b-grey{background:#eef1f4;color:#5b6470;}
+  .b-blue{background:var(--blue-soft);color:var(--blue);}
+  .tag{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;background:#eef1f4;color:#5b6470;vertical-align:middle;}
+  .tag.keap{background:#eaf6ec;color:#2d7a3e;}
+  .tag.thryv{background:var(--orange-soft);color:#c43d00;}
+  .small{font-size:11.5px;color:var(--muted);}
+  .pts{font-size:11px;color:var(--muted);display:block;margin-top:2px;}
+  .score-cell{font-weight:800;font-size:14px;}
+  .footnote{color:var(--muted);font-size:11.5px;margin-top:18px;line-height:1.6;}
+  .srcgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+  .src{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:15px 16px;}
+  .src h3{margin:0 0 6px;font-size:13.5px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .src p{margin:3px 0;font-size:12px;color:var(--muted);line-height:1.45;word-break:break-word;}
+  .setgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 24px;}
+  .setgrid .fld select{min-width:100%;}
+  .note{background:#f7f9fb;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.55;}
+  .empty{padding:30px;text-align:center;color:var(--muted);font-size:13px;}
+  .loadingbar{position:fixed;top:0;left:0;height:3px;background:var(--orange);width:0;transition:width .4s;z-index:99;}
+  @media(max-width:980px){.stats{grid-template-columns:repeat(3,1fr)}.grid2,.grid2e{grid-template-columns:1fr}
+    .pillars,.srcgrid{grid-template-columns:1fr}.setgrid{grid-template-columns:1fr}}
+  @media(max-width:560px){.wrap{padding:18px 16px 40px}.stats{grid-template-columns:repeat(2,1fr)}.kval{font-size:36px}}
+</style>
+</head>
+<body>
+<div class="loadingbar" id="loadbar"></div>
+<div class="wrap">
+
+  <div class="head">
+    <div class="brand">
+      <img src="thryv-logo.png" alt="Thryv" class="logo-img" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','&lt;div class=\'logo\'&gt;thryv&lt;/div&gt;')" />
+      <div>
+        <h1>Support KPI Scorecard · TSS &amp; Keap</h1>
+        <p class="sub">Customer Success &amp; Enablement · Productivity, QA and CSAT in one view</p>
+        <p class="updated" id="updated">Loading data…</p>
+      </div>
+    </div>
+    <div class="head-actions">
+      <div class="loaded" id="loaded"></div>
+      <label class="btn" for="fileIn">&#8679; Upload</label>
+      <input type="file" id="fileIn" multiple accept=".xlsx,.xls,.csv" style="display:none" />
+      <button class="btn" id="btnExport">&#8681; Export Excel</button>
+      <button class="btn" onclick="location.reload()">&#8635; Refresh</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-t="score" class="on">Scorecard</button>
+    <button data-t="prod">Productivity</button>
+    <button data-t="qa">QA</button>
+    <button data-t="csat">CSAT</button>
+    <button data-t="data">Data &amp; Settings</button>
+  </div>
+
+  <div class="filters" id="filterBar">
+    <div class="fld"><label>Quarter</label><div class="ms" id="msQuarter"></div></div>
+    <div class="fld"><label>Month</label><div class="ms" id="msMonth"></div></div>
+    <div class="fld"><label>Day</label><div class="ms" id="msDay"></div></div>
+    <div class="fld"><label>Brand</label><div class="ms" id="msBrand"></div></div>
+    <div class="fld"><label>Location</label><div class="ms" id="msLoc"></div></div>
+    <div class="fld"><label>Coach</label><div class="ms" id="msCoach"></div></div>
+    <div class="fld"><label>Agent</label><div class="ms" id="msAgent"></div></div>
+    <div class="fld"><button class="clearall" id="btnClear" type="button">Reset filters</button></div>
+  </div>
+
+  <!-- ================= SCORECARD ================= -->
+  <section id="tab-score">
+    <div class="hero">
+      <div class="kpi">
+        <div class="klabel">Team KPI Score</div>
+        <div class="kval" id="sHeroVal">-</div>
+        <div class="kdesc" id="sHeroDesc">Average agent score · 3 pillars weighted equally</div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-track"><div class="bar-fill" id="sHeroBar"></div></div>
+        <div class="goal-mark" style="left:100%"><div class="goal-line"></div><div class="goal-txt">100</div></div>
+      </div>
+      <div class="pill" id="sHeroPill">-</div>
+    </div>
+    <div class="pillars" id="pillars"></div>
+    <div class="stats" id="sStats"></div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>KPI Score by Agent</h2>
+        <p class="pdesc">Stacked by pillar. Each pillar is worth one third of the score.</p>
+        <div class="scrollchart"><div class="chartbox" id="scoreChartBox"><canvas id="scoreChart"></canvas></div></div>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:16px;">
+          <h2>Average by Coach</h2>
+          <p class="pdesc">Average agent KPI score by coach. Agents in training are excluded.</p>
+          <div class="chartbox" id="coachScoreBox"><canvas id="coachScoreChart"></canvas></div>
+        </div>
+        <div class="panel">
+          <h2>Pillars Met</h2>
+          <p class="pdesc">How many agents are meeting 3, 2, 1 or 0 of the pillar targets.</p>
+          <div class="chartbox" style="height:190px"><canvas id="metChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Agent Scorecard</h2>
+      <p class="pdesc" id="scoreHint">Click a header to sort.</p>
+      <div class="tblwrap"><table id="scoreTbl">
+        <thead><tr>
+          <th data-k="name">Agent</th>
+          <th data-k="brand">Brand</th>
+          <th data-k="coach">Coach</th>
+          <th data-k="prodPct" class="num">Productive %</th>
+          <th data-k="qaAvg" class="num">QA Avg</th>
+          <th data-k="csatQual" class="num">CSAT 9-10</th>
+          <th data-k="csatPace">CSAT Pacing</th>
+          <th data-k="met" class="num">Pillars Met</th>
+          <th data-k="total" class="num">KPI Score</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ================= PRODUCTIVITY ================= -->
+  <section id="tab-prod" style="display:none">
+    <div class="hero">
+      <div class="kpi">
+        <div class="klabel">Productive %</div>
+        <div class="kval" id="pHeroVal">-</div>
+        <div class="kdesc">(Logged In - Non-Productive) ÷ Logged In · Target <span id="pTargetTxt">75</span>%</div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-track"><div class="bar-fill" id="pHeroBar"></div></div>
+        <div class="goal-mark" id="pGoalMark" style="left:75%"><div class="goal-line"></div><div class="goal-txt">75%</div></div>
+      </div>
+      <div class="pill" id="pHeroPill">-</div>
+    </div>
+    <div class="stats" id="pStats"></div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>Productive % by Agent</h2>
+        <p class="pdesc">Green meets target, amber is within 5 points, red is below.</p>
+        <div class="scrollchart"><div class="chartbox" id="prodAgentBox"><canvas id="prodAgentChart"></canvas></div></div>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:16px;">
+          <h2>Productive % by Coach</h2>
+          <p class="pdesc">Agents in training are excluded.</p>
+          <div class="chartbox" id="prodCoachBox"><canvas id="prodCoachChart"></canvas></div>
+        </div>
+        <div class="panel">
+          <h2>Productive % Trend by Day</h2>
+          <p class="pdesc">Click a day to highlight it and filter the whole dashboard to that day. Click again to clear. Dashed line is the target.</p>
+          <div class="chartbox" style="height:220px"><canvas id="prodTrendChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Agent Detail</h2>
+      <p class="pdesc">Time is shown in hours (h:mm:ss). For status-level detail, attendance and hold time, see the full <a href="https://timramosthryv.github.io/tss-agent-time/" target="_blank" rel="noopener">TSS Agent Time dashboard</a>.</p>
+      <div class="tblwrap"><table id="prodTbl">
+        <thead><tr>
+          <th data-k="name">Agent</th><th data-k="brand">Brand</th><th data-k="coach">Coach</th>
+          <th data-k="days" class="num">Days</th><th data-k="login" class="num">Logged In</th>
+          <th data-k="prod" class="num">Productive</th><th data-k="nonprod" class="num">Non-Productive</th>
+          <th data-k="pct" class="num">Productive %</th>
+        </tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ================= QA ================= -->
+  <section id="tab-qa" style="display:none">
+    <div class="grid2e">
+      <div class="hero" style="margin:0">
+        <div class="kpi">
+          <div class="klabel">TSS QA</div>
+          <div class="kval" id="qThryvVal">-</div>
+          <div class="kdesc" id="qThryvDesc">Goal 93%</div>
+        </div>
+        <div class="pill" id="qThryvPill">-</div>
+      </div>
+      <div class="hero" style="margin:0">
+        <div class="kpi">
+          <div class="klabel">Keap Support QA</div>
+          <div class="kval" id="qKeapVal">-</div>
+          <div class="kdesc" id="qKeapDesc">Goal 90%</div>
+        </div>
+        <div class="pill" id="qKeapPill">-</div>
+      </div>
+    </div>
+    <div class="stats" id="qStats"></div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>QA Score by Agent vs Brand Goal</h2>
+        <p class="pdesc">Each agent is measured against their own brand's goal (TSS 93%, Keap 90%). Brand comes from the agent's TSS Agent Time group.</p>
+        <div class="scrollchart"><div class="chartbox" id="qaAgentBox"><canvas id="qaAgentChart"></canvas></div></div>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:16px;">
+          <h2>Average by Coach</h2>
+          <p class="pdesc">Agents in training are excluded.</p>
+          <div class="chartbox" id="qaCoachBox"><canvas id="qaCoachChart"></canvas></div>
+        </div>
+        <div class="panel" style="margin-bottom:16px;">
+          <h2>Average by Channel</h2>
+          <p class="pdesc">Chat, Voice, Email and Education.</p>
+          <div class="chartbox" style="height:180px"><canvas id="qaChannelChart"></canvas></div>
+        </div>
+        <div class="panel">
+          <h2>Score Distribution</h2>
+          <p class="pdesc">Count of evaluations by score band.</p>
+          <div class="chartbox" style="height:170px"><canvas id="qaDistChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Agent QA Scorecard</h2>
+      <p class="pdesc">Ranked lowest to highest. For evaluation-level detail, see the <a href="https://timramosthryv.github.io/thryv-support-evaluations/" target="_blank" rel="noopener">Thryv</a> and <a href="https://timramosthryv.github.io/keap-support-qa-evaluations/" target="_blank" rel="noopener">Keap</a> QA dashboards.</p>
+      <div class="tblwrap"><table id="qaTbl">
+        <thead><tr>
+          <th data-k="name">Agent</th><th data-k="brand">Brand</th><th data-k="coach">Coach</th>
+          <th data-k="n" class="num">Evaluations</th><th data-k="avg" class="num">Avg Score</th>
+          <th data-k="goal" class="num">Goal</th><th data-k="gap" class="num">Gap to Goal</th><th data-k="status">Status</th>
+        </tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ================= CSAT ================= -->
+  <section id="tab-csat" style="display:none">
+    <div class="hero">
+      <div class="kpi">
+        <div class="klabel">Agents at Quarterly Goal</div>
+        <div class="kval" id="cHeroVal">-</div>
+        <div class="kdesc" id="cHeroDesc">3 qualifying surveys per quarter · Intercom + Qualtrics combined</div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-track"><div class="bar-fill" id="cHeroBar"></div></div>
+      </div>
+      <div class="pill" id="cHeroPill">-</div>
+    </div>
+    <div class="stats" id="cStats"></div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>Qualifying Surveys by Agent</h2>
+        <p class="pdesc" id="cAgentHint">Intercom and Qualtrics stacked. Dashed line is the quarterly goal of 3.</p>
+        <div class="scrollchart"><div class="chartbox" id="csatAgentBox"><canvas id="csatAgentChart"></canvas></div></div>
+      </div>
+      <div>
+        <div class="panel" style="margin-bottom:16px;">
+          <h2>Intercom Rating Mix</h2>
+          <p class="pdesc">All Intercom teammate ratings in the current view.</p>
+          <div class="chartbox" style="height:200px"><canvas id="csatMixChart"></canvas></div>
+        </div>
+        <div class="panel">
+          <h2>Qualifying Surveys by Month</h2>
+          <p class="pdesc">Target pacing is 1 per agent per month.</p>
+          <div class="chartbox" style="height:200px"><canvas id="csatMonthChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Agent CSAT Detail</h2>
+      <p class="pdesc" id="csatTblHint">Qualifying = Intercom rating at or above the threshold in Settings, or a Qualtrics score of 9 or 10.</p>
+      <div class="tblwrap"><table id="csatTbl">
+        <thead><tr id="csatHeadRow"></tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ================= DATA & SETTINGS ================= -->
+  <section id="tab-data" style="display:none">
+    <div class="panel">
+      <h2>Scoring Settings</h2>
+      <p class="pdesc">Saved in this browser. Change these to match the Q4 KPI policy; every tab updates right away.</p>
+      <div class="setgrid">
+        <div class="fld"><label>Pillar scoring method</label>
+          <select id="setMethod">
+            <option value="proportional">Proportional: % of target earned, capped at 100%</option>
+            <option value="passfail">Pass / fail: full third when the target is met</option>
+          </select></div>
+        <div class="fld"><label>Intercom qualifying rating</label>
+          <select id="setIntercom">
+            <option value="4">Great or Amazing (4 or 5 of 5)</option>
+            <option value="5">Amazing only (5 of 5)</option>
+          </select></div>
+        <div class="fld"><label>Qualtrics qualifying score</label>
+          <select id="setQualtrics">
+            <option value="9">9 or 10</option>
+            <option value="10">10 only</option>
+          </select></div>
+        <div class="fld"><label>Agent with no data for a pillar</label>
+          <select id="setMissing">
+            <option value="reweight">Leave it out and re-weight the other pillars</option>
+            <option value="zero">Score that pillar as 0</option>
+          </select></div>
+      </div>
+      <div class="note" style="margin-top:16px" id="targetsNote"></div>
+    </div>
+
+    <div class="srcgrid" id="srcGrid"></div>
+
+    <div class="panel">
+      <h2>Name Matching Review</h2>
+      <p class="pdesc">Each source spells agent names differently. Names below were matched automatically on a partial name, or could not be matched at all. Add them to <b>data/roster.csv</b> (Aliases column) to lock them in.</p>
+      <div class="tblwrap"><table id="matchTbl">
+        <thead><tr><th>Source</th><th>Name in Source</th><th>Matched To</th><th>Method</th><th class="num">Rows</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" id="btnRoster">&#8681; Download roster template (pre-filled)</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>How Data Gets Here</h2>
+      <div class="note" id="howNote"></div>
+    </div>
+  </section>
+
+  <p class="footnote" id="footnote"></p>
+</div>
+
+<script>
+/* =====================================================================
+   CONFIG · edit this block when sources move (e.g. to SharePoint)
+   ===================================================================== */
+const CONFIG = {
+  sources: {
+    // TSS Agent Time: reads every 8x8 export in the tss-agent-time repo's data folder
+    tss:      { label:"TSS Agent Time (8x8)", kind:"github-folder", owner:"timramosthryv", repo:"tss-agent-time", path:"data", branch:"main" },
+    // QA: the same evals file each QA dashboard already reads
+    thryvQA:  { label:"Thryv Support QA (8x8)", kind:"file", url:"https://raw.githubusercontent.com/timramosthryv/thryv-support-evaluations/main/evals.csv" },
+    keapQA:   { label:"Keap Support QA (8x8)",  kind:"file", url:"https://raw.githubusercontent.com/timramosthryv/keap-support-qa-evaluations/main/evals.csv" },
+    // CSAT + roster: files in THIS repo's data folder
+    intercom: { label:"Intercom CSAT", kind:"file", url:"data/intercom.csv" },
+    qualtrics:{ label:"Qualtrics Survey", kind:"file", url:"data/qualtrics.csv" },
+    roster:   { label:"Agent Roster", kind:"file", url:"data/roster.csv" },
+  },
+  targets: { productive:75, qaThryv:93, qaKeap:90, csatPerQuarter:3, csatPerMonth:1 },
+  weights: { prod:1/3, qa:1/3, csat:1/3 },
+  // Optional: force the Qualtrics column names if auto-detect picks the wrong ones
+  // Qualtrics: the KPI counts 9s and 10s on "Likely to Hire" only.
+  qualtricsColumns: { agent:"All Case Owner Name", score:"Likely to Hire", date:"" },
+  // The current Qualtrics dashboard export has no response date. Until it does, every response in
+  // data/qualtrics.csv is counted on this date (the day the file was exported). Update it with each new file,
+  // or add a response date column to the export and this setting is ignored.
+  qualtricsNoDateAs: "2026-10-30",
+};
+
+/* ---- carried over from the TSS Agent Time dashboard ---- */
+const START_DATE = "2026-08-01";
+const EXCLUDE_AGENTS = ["Jorge Davis Volquez", "Genesis Ciriaco Maldonado"];
+const EXCLUDE_GROUPS = ["ClientSuccess Performance", "ClientSuccess AU Performance"];
+// New agents in training: shown, but left out of coach and team rollups while inside the window.
+// The roster's "Training End" column adds to or overrides this list.
+const TRAINING_START = "2026-08-17";
+const TRAINING_END   = "2026-11-17";
+const TRAINING_AGENTS = ["Grethel Polanco Coradin","Iris Mateo Perez","Heidy Baez Santa","Pabel Lora De Leon",
+  "Ismael Ozuna Gomez","Kesner Ramirez Ramirez","Cristhian Rosario Rosario"];
+
+/* ---- carried over from the Keap QA dashboard (agent -> coach) ---- */
+const KEAP_COACH = {};
+["Anthony Aguasvivas","Anthony Perez D Oleo","Arnold De Jesus Rodriguez","Avrill Sanchez Herasme","Camila Santana Guilamo",
+ "Carlos Leonardo","Carlos Dominguez Leonardo","Cristian Hiraldo Morales","Gabriela Flores Cruz","George Castro Cruz",
+ "Gianni Alcantara Zapata","Julio Martinez","Marielba Nunez Garcia","Menfis Vasquez Espinal","Randy Mejia Moscoso",
+ "Reyson Mendez Cabrera"].forEach(a=>KEAP_COACH[a.toLowerCase()]="Natalie Melo");
+["Adalu Javier De Los santos","Anthony Raccuia","Ashley Brown","Braian Vicente Santos","Cona Kight","Nocona Kight",
+ "Daniel Shepard","Emil Rosario Roque","Evan Vasquez","Holly Wiscombe","Jeaina Bautista Baez","Jorge Encarnacion Mercedes",
+ "Josue Rosario Sandoval","Logi Martinez Peguero","Luis Rubio","Manolo Mora","Matt Gowan","Matthew Gowan",
+ "Ovianny Jimenez Lorenzo","Stacie Merrill"].forEach(a=>KEAP_COACH[a.toLowerCase()]="Sal Gonzalez");
+const keapCoach = n => KEAP_COACH[String(n||"").replace(/['’]/g," ").replace(/\s+/g," ").trim().toLowerCase()] || "";
+
+/* ---- TSS status buckets (same definitions as the TSS dashboard) ---- */
+const STATUSES = [
+  {key:"available",productive:true,col:"Available Time"},
+  {key:"handling",productive:true,col:"Handling Time"},
+  {key:"apptsupport",productive:true,code:"appointment support",base:"offline"},
+  {key:"apptprep",productive:true,code:"appointment prep",base:"offline"},
+  {key:"chatsupport",productive:true,code:"chat support",base:"offline"},
+  {key:"emailsupport",productive:true,code:"email support",base:"offline"},
+  {key:"projectwork",productive:true,code:"project work",base:"offline"},
+  {key:"followup",productive:true,code:"follow up",base:"offline"},
+  {key:"wrapup",productive:true,col:"Wrap Up Time"},
+  {key:"relogin",productive:true},
+  {key:"addlwrapup",code:"additional wrap-up",base:"offline"},
+  {key:"meeting",code:"in a meeting",base:"offline"},
+  {key:"coaching",code:"coaching",base:"offline"},
+  {key:"training",code:"training",base:"offline"},
+  {key:"outofoffice",code:"out of office",base:"offline"},
+  {key:"offlineother",base:"offline",other:true},
+  {key:"awaydesk",code:"away from desk",base:"onbreak"},
+  {key:"brk",code:"break",base:"onbreak"},
+  {key:"lunch",code:"lunch",base:"onbreak"},
+  {key:"breakother",base:"onbreak",other:true},
+];
+const CODE_MAP={}; STATUSES.forEach(s=>{ if(s.code) CODE_MAP[s.code]=s.key; });
+const OFFLINE_CODE_KEYS=STATUSES.filter(s=>s.base==="offline"&&s.code).map(s=>s.key);
+const BREAK_CODE_KEYS=STATUSES.filter(s=>s.base==="onbreak"&&s.code).map(s=>s.key);
+const PROD_KEYS=STATUSES.filter(s=>s.productive).map(s=>s.key);
+const OTHER_TOL=2/60;
+const MONTHS={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const S = {
+  tss:[], qa:[], intercom:[], qualtrics:[], roster:[],
+  status:{}, agents:new Map(), match:[], tab:"score",
+  settings:{method:"proportional", intercomMin:4, qualtricsMin:9, missing:"reweight"},
+  sort:{}, charts:{},
+};
+const $ = s => document.querySelector(s);
+const esc = v => String(v==null?"":v).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : NaN;
+const r1 = n => Math.round(n*10)/10;
+const fmtPct = p => isFinite(p) ? r1(p).toFixed(1)+"%" : "-";
+const fmtHrs = h => { if(!isFinite(h)) return "0:00:00"; const t=Math.round(Math.abs(h)*3600);
+  return Math.floor(t/3600)+":"+String(Math.floor(t%3600/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0"); };
+const monthOf = d => d.slice(0,7);
+const monthLabel = m => MON[(+m.slice(5,7))-1]+" "+m.slice(0,4);
+const quarterOf = d => d.slice(0,4)+"-Q"+Math.ceil((+d.slice(5,7))/3);
+const quarterLabel = q => "Q"+q.split("-Q")[1]+" "+q.slice(0,4);
+const quarterMonths = q => { const y=q.slice(0,4), n=+q.split("-Q")[1]; return [0,1,2].map(i=>y+"-"+String((n-1)*3+1+i).padStart(2,"0")); };
+const todayISO = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+
+function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem("kpiSettings")||"null"); if(s) Object.assign(S.settings,s); }catch(e){} }
+function saveSettings(){ try{ localStorage.setItem("kpiSettings",JSON.stringify(S.settings)); }catch(e){} }
+
+/* =====================================================================
+   NAME HANDLING
+   ===================================================================== */
+const norm = s => String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase()
+  .replace(/['’`.]/g," ").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+const titleName = s => String(s||"").replace(/\s+/g," ").trim();
+const _exclA = new Set(EXCLUDE_AGENTS.map(norm));
+const _exclG = new Set(EXCLUDE_GROUPS.map(s=>s.toLowerCase()));
+
+/* Canonical agent registry. Key = normalized full name. */
+function upsertAgent(name, info){
+  const key=norm(name); if(!key) return null;
+  let a=S.agents.get(key);
+  if(!a){ a={key,name:titleName(name),brand:"",coach:"",location:"",sources:new Set(),trainingEnd:"",aliases:new Set()}; S.agents.set(key,a); }
+  if(info){
+    if(info.source) a.sources.add(info.source);
+    ["brand","coach","location"].forEach(f=>{ if(info[f] && (info.force || !a[f])) a[f]=info[f]; });
+    if(info.trainingEnd) a.trainingEnd=info.trainingEnd;
+  }
+  return a;
+}
+/* Match a raw name from any source to a canonical agent. */
+function buildMatcher(){
+  const list=[...S.agents.values()];
+  const alias=new Map();
+  list.forEach(a=>{ alias.set(a.key,a); a.aliases.forEach(x=>alias.set(norm(x),a)); });
+  const toks=a=>a.key.split(" ");
+  return function(raw, brandHint){
+    const n=norm(raw); if(!n) return {agent:null,method:"blank"};
+    if(alias.has(n)) return {agent:alias.get(n),method:"exact"};
+    const t=n.split(" ");
+    const full=t.filter(x=>x.length>1), inits=t.filter(x=>x.length===1);
+    const pool=brandHint ? list.filter(a=>!a.brand||a.brand===brandHint) : list;
+    const uniq=c=>c.length===1?c[0]:null;
+    // all full tokens present (e.g. "Jose M Figueroa" -> "Jose Figueroa Rijo")
+    if(full.length>=2){
+      let c=pool.filter(a=>full.every(x=>toks(a).includes(x)) && inits.every(i=>toks(a).some(y=>y.startsWith(i))));
+      if(uniq(c)) return {agent:c[0],method:"partial name"};
+      // first name prefix + a shared last name ("Matt Gowan" -> "Matthew Gowan", "Cona Kight" -> "Nocona Kight")
+      c=pool.filter(a=>{const at=toks(a); return at.slice(1).includes(full[full.length-1]) &&
+        (at[0].startsWith(full[0])||full[0].startsWith(at[0])||at[0].endsWith(full[0]));});
+      if(uniq(c)) return {agent:c[0],method:"partial name"};
+    }
+    // first name + initial ("George C" -> "George Castro Cruz")
+    if(full.length===1 && inits.length){
+      const c=pool.filter(a=>{const at=toks(a); return at[0]===full[0] && inits.every(i=>at.slice(1).some(y=>y.startsWith(i)));});
+      if(uniq(c)) return {agent:c[0],method:"first name + initial"};
+    }
+    // first name only ("Gianni"), resolved later by elimination if ambiguous
+    if(full.length===1 && !inits.length){
+      const c=pool.filter(a=>toks(a)[0]===full[0]);
+      if(uniq(c)) return {agent:c[0],method:"first name only"};
+      if(c.length>1) return {agent:null,method:"ambiguous",cands:c};
+    }
+    return {agent:null,method:"unmatched"};
+  };
+}
+/* Resolve a batch of distinct raw names; ambiguous first names are settled by removing candidates
+   already claimed by a stronger match from the same source. */
+function matchBatch(source, names, brandOf){
+  const m=buildMatcher(), res=new Map();
+  names.forEach(n=>res.set(n,m(n,brandOf?brandOf(n):"")));
+  const claimed=new Set([...res.values()].filter(r=>r.agent).map(r=>r.agent.key));
+  res.forEach((r,n)=>{ if(r.method==="ambiguous"){
+    const left=r.cands.filter(a=>!claimed.has(a.key));
+    if(left.length===1){ r.agent=left[0]; r.method="first name only (by elimination)"; claimed.add(left[0].key); }
+    else r.method="ambiguous ("+r.cands.map(a=>a.name).join(" / ")+")"; } });
+  return res;
+}
+
+/* =====================================================================
+   GENERIC PARSING HELPERS
+   ===================================================================== */
+function parseCSV(text){
+  const rows=[];let i=0,field="",row=[],q=false;
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  while(i<text.length){const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else q=false; } else field+=c; }
+    else { if(c==='"') q=true; else if(c===','){row.push(field);field="";}
+      else if(c==='\n'){row.push(field);rows.push(row);row=[];field="";} else if(c!=='\r') field+=c; }
+    i++;}
+  if(field.length||row.length){row.push(field);rows.push(row);}
+  return rows.filter(r=>r.some(c=>String(c).trim()!==""));
+}
+function bufToRows(buf, raw){
+  const b=new Uint8Array(buf.slice(0,2));
+  if(b[0]===0x50&&b[1]===0x4B){
+    const wb=XLSX.read(new Uint8Array(buf),{type:"array"});
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:!!raw,defval:"",blankrows:false});
+  }
+  return parseCSV(new TextDecoder("utf-8").decode(buf));
+}
+const findCol=(H,...kw)=>H.findIndex(h=>{const l=String(h).toLowerCase();return kw.every(k=>l.includes(k));});
+function headerRow(rows, test, maxScan=15){
+  for(let i=0;i<Math.min(rows.length,maxScan);i++){ const low=(rows[i]||[]).map(c=>String(c==null?"":c).toLowerCase().trim()); if(test(low)) return i; }
+  return -1;
+}
+function toISO(v){
+  if(v==null||v==="") return "";
+  if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  if(typeof v==="number" && v>20000 && v<80000) return new Date(Date.UTC(1899,11,30)+v*864e5).toISOString().slice(0,10);
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return y+"-"+String(+m[1]).padStart(2,"0")+"-"+String(+m[2]).padStart(2,"0"); }
+  m=s.match(/([A-Z][a-z]{2})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/); if(m && MONTHS[m[1]]!=null) return m[3]+"-"+String(MONTHS[m[1]]+1).padStart(2,"0")+"-"+String(+m[2]).padStart(2,"0");
+  m=s.match(/(\d{1,2})\s+([A-Z][a-z]{2})[a-z]*\s+(\d{4})/); if(m && MONTHS[m[2]]!=null) return m[3]+"-"+String(MONTHS[m[2]]+1).padStart(2,"0")+"-"+String(+m[1]).padStart(2,"0");
+  if(/^\d{10,13}$/.test(s)){ const n=+s; return new Date(s.length===10?n*1000:n).toISOString().slice(0,10); }
+  if(!/\b\d{4}\b/.test(s)) return "";
+  const d=new Date(s); return isNaN(d)?"":d.toISOString().slice(0,10);
+}
+/* strict date reader for 8x8 exports (same rules as the TSS dashboard) */
+function tssDate(c){
+  if(c instanceof Date && !isNaN(c)) return c.toISOString().slice(0,10);
+  if(typeof c==="number") return new Date(Date.UTC(1899,11,30)+c*864e5).toISOString().slice(0,10);
+  if(typeof c==="string"){ const s=c.trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+    m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) return m[3]+"-"+String(m[1]).padStart(2,"0")+"-"+String(m[2]).padStart(2,"0"); }
+  return null;
+}
+async function fetchBuf(url){
+  const u=url+(url.includes("?")?"&":"?")+"t="+Date.now();
+  const r=await fetch(u,{cache:"no-store"}); if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.arrayBuffer();
+}
+
+/* =====================================================================
+   SOURCE: TSS AGENT TIME (ported from the TSS dashboard)
+   ===================================================================== */
+function toHours(v){
+  if(v==null||v==="") return 0;
+  if(typeof v==="number") return v*24;
+  if(v instanceof Date) return v.getUTCHours()+v.getUTCMinutes()/60+v.getUTCSeconds()/3600;
+  if(typeof v==="string"){ let s=v.trim(),days=0; const dm=s.match(/(\d+)\s*days?[,\s]+(.*)/i); if(dm){days=+dm[1];s=dm[2];}
+    const p=s.split(":").map(Number);
+    if(p.length===3&&p.every(n=>!isNaN(n))) return days*24+p[0]+p[1]/60+p[2]/3600;
+    if(p.length===2&&p.every(n=>!isNaN(n))) return days*24+p[0]+p[1]/60;
+    const f=parseFloat(s); return isNaN(f)?0:f*24; }
+  return 0;
+}
+const cleanGroup = g => String(g||"").replace(/^ThryvService_TSS_/,"").replace(/_/g," ").trim();
+const parseGen = name => { const m=name.match(/_([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2})[_:](\d{2})/); return m?Date.UTC(+m[3],MONTHS[m[1]]??0,+m[2],+m[4],+m[5]):0; };
+const seriesKey = name => { const rep=(name.match(/^(.*?)_[A-Z][a-z]{2}\s+\d{1,2}\s+\d{4}\s+\d{1,2}[_:]\d{2}/)||[])[1]||name.replace(/\.[^.]+$/,"");
+  const per=(name.match(/,\s*([A-Z][a-z]{2}\s+\d{1,2}\s+\d{4})\s*-/)||[])[1]||""; return rep.trim()+"|"+per.trim(); };
+function tssParse(buf){
+  const wb=XLSX.read(buf,{type:"array"}); const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,blankrows:false});
+  if(rows.findIndex(r=>r&&r.some(c=>String(c).trim()==="Transaction ID"))>=0) return {kind:"skip",rows:[]};
+  const hi=rows.findIndex(r=>r&&r.some(c=>String(c).trim()==="Start Time")); if(hi<0) return {kind:"skip",rows:[]};
+  const head=rows[hi].map(c=>String(c).trim()); const idx=n=>head.indexOf(n);
+  const out=[];
+  if(idx("Status Code Item")>=0 && idx("Logged In Time")<0){
+    const iD=idx("Start Time"),iA=idx("Agent"),iI=idx("Status Code Item"),iT=idx("Time"),iS=idx("Status");
+    for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue; const d=tssDate(row[iD]); if(!d) continue;
+      const agent=String(row[iA]||"").trim(); if(!agent||_exclA.has(norm(agent))) continue;
+      const item=String(row[iI]||"").trim().toLowerCase();
+      if(item==="agent relogin"){ const p=String(iS>=0?row[iS]:"").trim().toLowerCase();
+        const k=p==="on break"?"_reloginbrk":(p==="working offline"?"_reloginoff":null);
+        if(k) out.push({date:d,agent,key:k,hours:toHours(row[iT])}); continue; }
+      const key=CODE_MAP[item]; if(key) out.push({date:d,agent,key,hours:toHours(row[iT])}); }
+    return {kind:"codes",rows:out};
+  }
+  const iD=idx("Start Time"),iG=idx("Group"),iA=idx("Agent"),iOff=idx("Working Offline Time"),iBrk=idx("On Break Time");
+  for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue; const d=tssDate(row[iD]); if(!d) continue;
+    const agent=String(row[iA]||"").trim(); if(!agent||_exclA.has(norm(agent))) continue;
+    const grp=cleanGroup(row[iG]);
+    const rec={date:d,group:grp,location:(grp.split(" ")[0]||""),agent,id:String(row[idx("Agent Id")]||"").trim()};
+    STATUSES.forEach(s=>rec[s.key]=s.col?toHours(row[idx(s.col)]):0);
+    rec.loggedin=toHours(row[idx("Logged In Time")]);
+    rec.offline=iOff>=0?toHours(row[iOff]):0; rec.onbreak=iBrk>=0?toHours(row[iBrk]):0;
+    out.push(rec); }
+  return {kind:"main",rows:out};
+}
+function tssMerge(parsedList){
+  const seen=new Set(), out=[], codes=[];
+  parsedList.forEach(p=>{
+    if(p.kind==="codes"){ codes.push(...p.rows); return; }
+    if(p.kind!=="main") return;
+    p.rows.forEach(r=>{ if(r.date<START_DATE||_exclG.has(r.group.toLowerCase())) return;
+      const k=r.date+"|"+r.agent+"|"+(r.id||r.agent); if(seen.has(k)) return; seen.add(k); out.push(r); });
+  });
+  const by=new Map(); codes.forEach(c=>{const k=c.date+"|"+c.agent; const o=by.get(k)||{}; o[c.key]=(o[c.key]||0)+c.hours; by.set(k,o);});
+  out.forEach(r=>{
+    const o=by.get(r.date+"|"+r.agent); if(o) for(const k in o) r[k]=(r[k]||0)+o[k];
+    r.relogin=(r._reloginoff||0)+(r._reloginbrk||0);
+    let wo=0; OFFLINE_CODE_KEYS.forEach(k=>wo+=r[k]||0); wo+=(r._reloginoff||0);
+    let bk=0; BREAK_CODE_KEYS.forEach(k=>bk+=r[k]||0); bk+=(r._reloginbrk||0);
+    r.offlineother=Math.max(0,(r.offline||0)-wo); r.breakother=Math.max(0,(r.onbreak||0)-bk);
+    [["offlineother",OFFLINE_CODE_KEYS],["breakother",BREAK_CODE_KEYS]].forEach(([ok,keys])=>{
+      const v=r[ok]||0; if(v<=0||v>=OTHER_TOL) return; let best=null,bv=0; keys.forEach(k=>{if((r[k]||0)>bv){bv=r[k];best=k;}}); if(best){r[best]+=v;r[ok]=0;} });
+    r.prod=PROD_KEYS.reduce((a,k)=>a+(r[k]||0),0);
+  });
+  return out;
+}
+async function loadTSS(){
+  const c=CONFIG.sources.tss;
+  const api=`https://api.github.com/repos/${c.owner}/${c.repo}/contents/${c.path}?ref=${c.branch}`;
+  const res=await fetch(api,{cache:"no-store",headers:{Accept:"application/vnd.github+json"}});
+  if(!res.ok) throw new Error("GitHub folder list returned "+res.status);
+  const sameMonth=n=>{const m=n.match(/,\s*([A-Z][a-z]{2})\s+\d{1,2}\s+(\d{4})\s*-\s*([A-Z][a-z]{2})\s+\d{1,2}\s+(\d{4})/); return !m||(m[1]===m[3]&&m[2]===m[4]);};
+  let files=(await res.json()).filter(f=>f.type==="file"&&/\.xlsx?$/i.test(f.name)&&!/_MONTH\.xlsx?$/i.test(f.name)&&sameMonth(f.name)&&!/Agent Status Change/i.test(f.name));
+  const best=new Map(); files.forEach(f=>{f._gen=parseGen(f.name); const k=seriesKey(f.name),cur=best.get(k); if(!cur||f._gen>cur._gen) best.set(k,f);});
+  files=[...best.values()].sort((a,b)=>b._gen-a._gen);
+  const bufs=await Promise.all(files.map(f=>fetchBuf(f.download_url)));
+  S.tss=tssMerge(bufs.map(b=>{try{return tssParse(b);}catch(e){return {kind:"skip"};}}));
+  const newest=files[0]?files[0].name:"";
+  return {rows:S.tss.length, files:files.length, note:newest?("Latest: "+newest):""};
+}
+
+/* =====================================================================
+   SOURCE: QA (8x8 Search Evaluations export)
+   ===================================================================== */
+function channelFrom(t){ t=(t||"").toLowerCase();
+  if(t.includes("educat")) return "Education"; if(t.includes("voice")||t.includes("call")) return "Voice";
+  if(t.includes("chat")) return "Chat"; if(t.includes("email")) return "Email"; return t?"Other":"Other"; }
+function qaFromRows(rows, brandForced){
+  const hi=headerRow(rows,l=>l.some(c=>c.includes("agent name"))&&l.some(c=>c.includes("score")));
+  if(hi<0) throw new Error("No 'Agent name' / score header found");
+  const H=rows[hi].map(h=>String(h).trim());
+  const cA=findCol(H,"agent","name"), cS=findCol(H,"overall","score")>=0?findCol(H,"overall","score"):findCol(H,"score");
+  const cG=findCol(H,"main","group"), cT=findCol(H,"template"), cE=findCol(H,"evaluator");
+  const cD=findCol(H,"evaluation","date")>=0?findCol(H,"evaluation","date"):findCol(H,"date");
+  const out=[];
+  for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue;
+    const agent=titleName(row[cA]); const score=parseFloat(String(row[cS]).replace("%",""));
+    if(!agent||isNaN(score)||_exclA.has(norm(agent))) continue;
+    const g=cG>=0?String(row[cG]||"").trim():"";
+    const brand = brandForced || (/keap/i.test(g)?"Keap":"Thryv");
+    if(brandForced==="Keap" && g && g!=="Keap_Support") continue;
+    const grp=cleanGroup(g);
+    const coachQA = brand==="Keap" ? "" : (grp.split(" ").slice(1).join(" ")||grp);
+    out.push({agent,score:Math.round(score),brand,group:grp,coachQA,channel:channelFrom(cT>=0?row[cT]:""),
+      evaluator:cE>=0?String(row[cE]||""):"", date:toISO(row[cD])});
+  }
+  return out;
+}
+async function loadQA(which){
+  const c=CONFIG.sources[which]; const rows=bufToRows(await fetchBuf(c.url));
+  const recs=qaFromRows(rows, which==="keapQA"?"Keap":"Thryv");
+  S.qa=S.qa.filter(r=>r.brand!==(which==="keapQA"?"Keap":"Thryv")).concat(recs);
+  const ds=recs.map(r=>r.date).filter(Boolean).sort();
+  return {rows:recs.length, note:ds.length?("Evaluations "+ds[0]+" to "+ds[ds.length-1]):""};
+}
+
+/* =====================================================================
+   SOURCE: INTERCOM (conversation ratings export)
+   Expected columns (any order): Teammate rated · Conversation rating · a date column
+   (Rated at / Updated at / Created at) · optional Conversation ID, Team currently assigned
+   ===================================================================== */
+const RATING_WORDS={terrible:1,bad:2,ok:3,okay:3,great:4,amazing:5,"😠":1,"🙁":2,"😐":3,"😃":4,"🤩":5};
+function ratingVal(v){ const s=String(v||"").trim(); if(!s) return NaN;
+  const n=parseFloat(s); if(!isNaN(n)&&n>=1&&n<=5) return Math.round(n);
+  const l=s.toLowerCase(); for(const w in RATING_WORDS){ if(l.includes(w)) return RATING_WORDS[w]; } return NaN; }
+function intercomFromRows(rows){
+  const hi=headerRow(rows,l=>l.some(c=>c.includes("teammate"))&&l.some(c=>c.includes("rating")));
+  if(hi<0) throw new Error("No 'Teammate rated' / 'Conversation rating' header found");
+  const H=rows[hi].map(h=>String(h).trim());
+  // Works with two Intercom exports:
+  //   1) Report drill-in CSV:  Teammate rated · Conversation rating · Updated at
+  //   2) Dataset Export (Conversation dataset): Last teammate rated · Last teammate rating · Last conversation rating updated at
+  const exact=re=>H.findIndex(h=>re.test(h.trim()));
+  let cT=exact(/^last teammate rated$/i); if(cT<0) cT=exact(/^teammate rated$/i); if(cT<0) cT=findCol(H,"teammate","rated");
+  let cR=exact(/^conversation rating$/i); if(cR<0) cR=exact(/^last teammate rating$/i);
+  if(cR<0) cR=H.findIndex(h=>/rating/i.test(h)&&!/remark|request|survey|id|updated|fin|chatbot|cx score/i.test(h));
+  let cD=exact(/^last conversation rating updated at$/i); if(cD<0) cD=H.findIndex(h=>/rated at/i.test(h));
+  if(cD<0) cD=exact(/^updated at$/i); if(cD<0) cD=findCol(H,"updated"); if(cD<0) cD=findCol(H,"created"); if(cD<0) cD=H.findIndex(h=>/date|time/i.test(h));
+  const cI=exact(/^conversation id$/i)>=0?exact(/^conversation id$/i):findCol(H,"conversation","id");
+  const cTeam=exact(/^team currently assigned$/i)>=0?exact(/^team currently assigned$/i):H.findIndex(h=>/\bteam\b/i.test(h)&&!/teammate|id$/i.test(h));
+  const seen=new Set(), out=[];
+  for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue;
+    const name=titleName(row[cT]); const rating=ratingVal(row[cR]); if(!name||isNaN(rating)) continue;
+    const id=cI>=0?String(row[cI]||""):""; const k=id?id+"|"+name:"";
+    if(k){ if(seen.has(k)) continue; seen.add(k); }
+    const team=cTeam>=0?String(row[cTeam]||""):"";
+    out.push({name,rating,date:toISO(row[cD]),team,brandHint:/keap/i.test(team)?"Keap":(/thryv/i.test(team)?"Thryv":"")});
+  }
+  return out;
+}
+
+/* =====================================================================
+   SOURCE: QUALTRICS (survey export). Auto-detects agent, 0-10 score and date columns.
+   Set CONFIG.qualtricsColumns to force exact column names.
+   ===================================================================== */
+const qualtricsNote = q => "Scored on: "+q.cols[1]+" · Agent column: "+q.cols[0]+
+  (q.assumedDate?" · No response date in this export, so all responses are counted on "+q.assumedDate:"");
+function qualtricsFromRows(rows, fileDate){
+  const QC=CONFIG.qualtricsColumns;
+  let hi=headerRow(rows,l=>l.some(c=>/recordeddate|enddate|responseid|recorded date|end date|likely to hire/.test(c))||(l.some(c=>/agent|rep|advisor|teammate|csm|owner/.test(c))&&l.some(c=>/score|nps|recommend|rating|likely/.test(c))));
+  if(hi<0) throw new Error("Could not find the Qualtrics header row");
+  const H=rows[hi].map(h=>String(h).trim());
+  const pick=(forced,re)=>{ if(forced){const i=H.findIndex(h=>h.toLowerCase()===forced.toLowerCase()); if(i>=0) return i;} return H.findIndex(h=>re.test(h)); };
+  const cA=pick(QC.agent,/case owner|owner name|agent|rep\b|representative|advisor|teammate|csm|specialist/i);
+  const cS=pick(QC.score,/likely to hire|nps|recommend|likely|score|rating|csat/i);
+  const cD=pick(QC.date,/recordeddate|recorded date|enddate|end date|response date|date|completed/i);
+  const cC=H.findIndex(h=>/^count$/i.test(h)), cE=H.findIndex(h=>/\beid\b|response ?id/i.test(h));
+  if(cA<0||cS<0) throw new Error("Could not find agent and score columns (set CONFIG.qualtricsColumns)");
+  const fallback=fileDate||CONFIG.qualtricsNoDateAs||"";
+  const out=[], seen=new Set();
+  for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue;
+    if(cC>=0 && String(row[cC]).trim()!=="" && +row[cC]===0) continue;           // dashboard exports list every case; Count 1 = a response
+    const raw=String(row[cS]==null?"":row[cS]).trim(); if(raw==="") continue;    // no answer to the KPI question
+    const name=titleName(row[cA]); const s=parseFloat(raw);
+    if(!name||isNaN(s)||s<0||s>10) continue;                                     // also skips Qualtrics' 2nd/3rd header rows
+    const id=cE>=0?String(row[cE]||"").trim():""; if(id){ const k=id+"|"+name; if(seen.has(k)) continue; seen.add(k); }
+    const d=cD>=0?toISO(row[cD]):"";
+    out.push({name,score:s,date:d||fallback,dateAssumed:!d,id}); }
+  return {rows:out, cols:[H[cA],H[cS],cD>=0?H[cD]:"no date column"], assumedDate:cD<0?fallback:""};
+}
+
+/* =====================================================================
+   SOURCE: ROSTER  (Agent, Brand, Coach, Location, Training End, Aliases)
+   Aliases = other spellings separated by ; (e.g. "George C; George Castro")
+   ===================================================================== */
+function rosterFromRows(rows){
+  const hi=headerRow(rows,l=>l.some(c=>c==="agent"||c.includes("agent name")||c==="name")&&l.some(c=>c.includes("brand")||c.includes("coach")));
+  if(hi<0) throw new Error("Roster needs Agent and Brand or Coach columns");
+  const H=rows[hi].map(h=>String(h).trim().toLowerCase());
+  const col=re=>H.findIndex(h=>re.test(h));
+  const cA=col(/^agent$|agent name|^name$|full name/), cB=col(/brand/), cC=col(/coach|supervisor|leader/), cL=col(/location|site/),
+        cT=col(/training/), cX=col(/alias|other names|intercom|qualtrics/);
+  const out=[];
+  for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue; const name=titleName(row[cA]); if(!name) continue;
+    let brand=cB>=0?String(row[cB]||"").trim():""; brand=/keap/i.test(brand)?"Keap":(/thryv|tss/i.test(brand)?"Thryv":brand);
+    out.push({name,brand,coach:cC>=0?titleName(row[cC]):"",location:cL>=0?titleName(row[cL]):"",
+      trainingEnd:cT>=0?toISO(row[cT]):"", aliases:cX>=0?String(row[cX]||"").split(/[;|]/).map(s=>s.trim()).filter(Boolean):[]}); }
+  return out;
+}
+
+/* =====================================================================
+   LOAD ALL
+   ===================================================================== */
+async function loadSource(key, fn){
+  try{ const r=await fn(); S.status[key]={ok:true,...r}; }
+  catch(e){ S.status[key]={ok:false,error:String(e.message||e)}; }
+}
+async function loadAll(){
+  const bar=$("#loadbar"); bar.style.width="15%";
+  await Promise.all([
+    loadSource("tss",loadTSS),
+    loadSource("thryvQA",()=>loadQA("thryvQA")),
+    loadSource("keapQA",()=>loadQA("keapQA")),
+    loadSource("intercom",async()=>{ S.intercom=intercomFromRows(bufToRows(await fetchBuf(CONFIG.sources.intercom.url))); return {rows:S.intercom.length}; }),
+    loadSource("qualtrics",async()=>{ const q=qualtricsFromRows(bufToRows(await fetchBuf(CONFIG.sources.qualtrics.url))); S.qualtrics=q.rows; return {rows:q.rows.length,note:qualtricsNote(q)}; }),
+    loadSource("roster",async()=>{ S.roster=rosterFromRows(bufToRows(await fetchBuf(CONFIG.sources.roster.url))); return {rows:S.roster.length}; }),
+  ]);
+  bar.style.width="80%";
+  buildModel();
+  bar.style.width="100%"; setTimeout(()=>bar.style.opacity=0,400);
+}
+
+/* =====================================================================
+   MODEL: canonical agents + source records tagged with agent key
+   ===================================================================== */
+const isTrainee = (a, startDate, endDate) => {
+  if(!a) return false;
+  if(a.trainingEnd) return a.trainingEnd >= (startDate||"0000");
+  const inList=TRAINING_AGENTS.some(n=>norm(n)===a.key);
+  return inList && TRAINING_END >= (startDate||"0000") && TRAINING_START <= (endDate||"9999");
+};
+const trainingDay = (a,d) => { if(!a) return false; if(a.trainingEnd) return d<=a.trainingEnd;
+  return TRAINING_AGENTS.some(n=>norm(n)===a.key) && d>=TRAINING_START && d<=TRAINING_END; };
+function coachFromGroup(g){ const p=String(g||"").split(" "); return p.length>1?p.slice(1).join(" "):g; }
+function buildModel(){
+  S.agents=new Map(); S.match=[];
+  // 1. roster wins
+  S.roster.forEach(r=>{ const a=upsertAgent(r.name,{source:"Roster",brand:r.brand,coach:r.coach,location:r.location,trainingEnd:r.trainingEnd,force:true}); r.aliases.forEach(x=>a.aliases.add(x)); });
+  // 2. TSS (full names from 8x8)
+  const tssLatest=new Map(); S.tss.slice().sort((x,y)=>x.date<y.date?-1:1).forEach(r=>tssLatest.set(norm(r.agent),r));
+  const m0=buildMatcher();
+  tssLatest.forEach((r,k)=>{
+    const brand=/keap/i.test(r.group)?"Keap":"Thryv";
+    const hit=S.roster.length?m0(r.agent):{agent:null};
+    const target=hit.agent?hit.agent.name:r.agent;
+    const ta=upsertAgent(target,{source:"TSS",brand,location:r.location,coach:brand==="Keap"?keapCoach(r.agent):coachFromGroup(r.group)});
+    if(ta) ta.group=r.group;
+    if(hit.agent && hit.method!=="exact") S.match.push({src:"TSS",raw:r.agent,to:hit.agent.name,method:hit.method,n:1});
+  });
+  const tssKey=new Map(); { const m=buildMatcher(); tssLatest.forEach((r,k)=>{ const h=m(r.agent); tssKey.set(k,h.agent?h.agent.key:k); }); }
+  S.tss.forEach(r=>r.akey=tssKey.get(norm(r.agent))||norm(r.agent));
+  // 3. QA names: match to TSS/roster, otherwise create
+  { const names=[...new Set(S.qa.map(r=>r.agent))]; const brandOf=n=>{const r=S.qa.find(x=>x.agent===n);return r?r.brand:"";};
+    const res=matchBatch("QA",names,brandOf);
+    names.forEach(n=>{ const h=res.get(n); const rec=S.qa.find(x=>x.agent===n);
+      let a=h.agent;
+      if(!a || h.method.startsWith("first name")){ a=upsertAgent(n,{source:"QA",brand:rec.brand}); }
+      else if(h.method!=="exact") S.match.push({src:rec.brand+" QA",raw:n,to:a.name,method:h.method,n:S.qa.filter(x=>x.agent===n).length});
+      a.sources.add("QA");
+      if(!a.brand) a.brand=rec.brand;
+      if(!a.coach) a.coach = rec.brand==="Keap" ? keapCoach(n) : rec.coachQA;
+      S.qa.filter(x=>x.agent===n).forEach(x=>x.akey=a.key);
+    }); }
+  // 4. Intercom + Qualtrics (short display names)
+  [["Intercom",S.intercom],["Qualtrics",S.qualtrics]].forEach(([src,arr])=>{
+    const names=[...new Set(arr.map(r=>r.name))];
+    const brandOf=n=>{const r=arr.find(x=>x.name===n); return r&&r.brandHint||"";};
+    const res=matchBatch(src,names,brandOf);
+    names.forEach(n=>{ const h=res.get(n); const cnt=arr.filter(x=>x.name===n).length;
+      if(h.agent){ h.agent.sources.add(src); arr.filter(x=>x.name===n).forEach(x=>x.akey=h.agent.key);
+        if(h.method!=="exact") S.match.push({src,raw:n,to:h.agent.name,method:h.method,n:cnt}); }
+      else { arr.filter(x=>x.name===n).forEach(x=>x.akey=null); S.match.push({src,raw:n,to:"",method:h.method,n:cnt}); }
+    });
+  });
+  S.agents.forEach(a=>{ if(!a.brand) a.brand="Thryv"; if(!a.coach) a.coach="Unassigned"; if(!a.location) a.location=a.brand==="Keap"?"Keap":"-"; });
+  populateFilters();
+  renderAll();
+}
+
+/* =====================================================================
+   FILTERS
+   ===================================================================== */
+/* Every filter is a multi-select. An empty set means "All". */
+const F={quarter:new Set(),month:new Set(),day:new Set(),brand:new Set(),loc:new Set(),coach:new Set(),agent:new Set()};
+const MS={};
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const dayLabel=d=>{ const dt=new Date(d+"T12:00:00"); return MON[dt.getMonth()]+" "+dt.getDate()+" · "+DOW[dt.getDay()]; };
+function makeMS(boxId,key,noun){
+  const box=$(boxId); box.innerHTML="";
+  const btn=document.createElement("button"); btn.type="button"; btn.className="ms-btn";
+  const panel=document.createElement("div"); panel.className="ms-panel"; panel.hidden=true;
+  box.append(btn,panel);
+  const set=F[key];
+  const ms={items:[],
+    setItems(items){ this.items=items; const ok=new Set(items.map(i=>i.v)); [...set].forEach(v=>{ if(!ok.has(v)) set.delete(v); }); this.draw(); },
+    label(){ const n=set.size; btn.textContent = n===0?"All "+noun:(n===1?((this.items.find(i=>set.has(i.v))||{}).t||"1 selected"):n+" "+noun.toLowerCase()+" selected");
+      btn.classList.toggle("active",n>0); btn.title=n?this.items.filter(i=>set.has(i.v)).map(i=>i.t).join(", "):""; },
+    draw(){
+      panel.innerHTML="";
+      if(this.items.length>12){ const s=document.createElement("input"); s.type="search"; s.placeholder="Search "+noun.toLowerCase()+"…"; s.className="ms-search";
+        s.oninput=()=>{ const q=s.value.toLowerCase(); panel.querySelectorAll("label.ms-item").forEach(l=>l.style.display=l.textContent.toLowerCase().includes(q)?"":"none"); };
+        panel.appendChild(s); }
+      const all=document.createElement("label"); all.className="ms-all"; const ac=document.createElement("input"); ac.type="checkbox"; ac.checked=set.size===0;
+      all.append(ac,document.createTextNode("All "+noun)); panel.appendChild(all);
+      const boxes=[];
+      ac.onchange=()=>{ set.clear(); ac.checked=true; boxes.forEach(b=>b.checked=false); this.label(); onFilter(key); };
+      this.items.forEach(it=>{ const l=document.createElement("label"); l.className="ms-item"; const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=set.has(it.v); boxes.push(cb);
+        cb.onchange=()=>{ if(cb.checked) set.add(it.v); else set.delete(it.v); ac.checked=set.size===0; this.label(); onFilter(key); };
+        l.append(cb,document.createTextNode(it.t)); panel.appendChild(l); });
+      this.label();
+    }};
+  btn.onclick=e=>{ e.stopPropagation(); document.querySelectorAll(".ms-panel").forEach(p=>{ if(p!==panel) p.hidden=true; }); panel.hidden=!panel.hidden; };
+  panel.onclick=e=>e.stopPropagation();
+  MS[key]=ms; return ms;
+}
+document.addEventListener("click",()=>document.querySelectorAll(".ms-panel").forEach(p=>p.hidden=true));
+function allDates(){ return [...S.tss.map(r=>r.date),...S.qa.map(r=>r.date),...S.intercom.map(r=>r.date),...S.qualtrics.map(r=>r.date)].filter(Boolean); }
+function populateFilters(){
+  if(!MS.quarter){ makeMS("#msQuarter","quarter","Quarters"); makeMS("#msMonth","month","Months"); makeMS("#msDay","day","Days");
+    makeMS("#msBrand","brand","Brands"); makeMS("#msLoc","loc","Locations"); makeMS("#msCoach","coach","Coaches"); makeMS("#msAgent","agent","Agents");
+    F.quarter.add(quarterOf(todayISO())); }
+  const qs=[...new Set(allDates().map(quarterOf).concat([quarterOf(todayISO())]))].sort().reverse();
+  MS.quarter.setItems(qs.map(q=>({v:q,t:quarterLabel(q)})));
+  refreshPeriodFilters(); refreshDims();
+}
+function refreshPeriodFilters(){
+  const qs=F.quarter.size?[...F.quarter]:MS.quarter.items.map(i=>i.v);
+  const months=[...new Set(qs.flatMap(quarterMonths))].filter(m=>m<=monthOf(todayISO())).sort();
+  MS.month.setItems(months.map(m=>({v:m,t:monthLabel(m)})));
+  const mset=new Set(F.month.size?[...F.month]:months);
+  const days=[...new Set(allDates().filter(d=>mset.has(monthOf(d))&&d<=todayISO()))].sort().reverse();
+  MS.day.setItems(days.map(d=>({v:d,t:dayLabel(d)})));
+}
+function refreshDims(){
+  const ag=[...S.agents.values()];
+  const inB=a=>!F.brand.size||F.brand.has(a.brand), inL=a=>!F.loc.size||F.loc.has(a.location), inC=a=>!F.coach.size||F.coach.has(a.coach);
+  MS.brand.setItems([{v:"Thryv",t:"TSS"},{v:"Keap",t:"Keap"}]);
+  MS.loc.setItems([...new Set(ag.filter(inB).map(a=>a.location))].sort().map(v=>({v,t:v})));
+  MS.coach.setItems([...new Set(ag.filter(a=>inB(a)&&inL(a)).map(a=>a.coach))].sort().map(v=>({v,t:v})));
+  MS.agent.setItems(ag.filter(a=>inB(a)&&inL(a)&&inC(a)).map(a=>({v:a.key,t:a.name})).sort((x,y)=>x.t.localeCompare(y.t)));
+}
+function onFilter(key){
+  if(key==="quarter") refreshPeriodFilters();
+  else if(key==="month"){ const qs=F.quarter.size?[...F.quarter]:MS.quarter.items.map(i=>i.v); const months=[...new Set(qs.flatMap(quarterMonths))].sort();
+    const mset=new Set(F.month.size?[...F.month]:months);
+    MS.day.setItems([...new Set(allDates().filter(d=>mset.has(monthOf(d))&&d<=todayISO()))].sort().reverse().map(d=>({v:d,t:dayLabel(d)}))); }
+  else if(["brand","loc","coach"].includes(key)) refreshDims();
+  renderAll();
+}
+function period(){
+  const qs=(F.quarter.size?[...F.quarter]:MS.quarter.items.map(i=>i.v)).sort();
+  let months=[...new Set(qs.flatMap(quarterMonths))].sort();
+  if(F.month.size) months=months.filter(m=>F.month.has(m));
+  const mset=new Set(months);
+  const days=F.day.size?new Set([...F.day].filter(d=>mset.has(monthOf(d)))):null;
+  if(days) months=months.filter(m=>[...days].some(d=>monthOf(d)===m));
+  const has=d=>!!d && mset.has(monthOf(d)) && (!days||days.has(d));
+  const hasNoDay=d=>!!d && mset.has(monthOf(d));            // ignores the Day filter (used to show the full trend with selected days highlighted)
+  const elapsed=months.filter(m=>m<=monthOf(todayISO())).length;
+  let label;
+  if(days){ const ds=[...days].sort(); label=ds.length<=3?ds.map(dayLabel).join(", "):(ds.length+" days selected"); }
+  else if(F.month.size) label=months.map(monthLabel).join(", ");
+  else label=qs.map(q=>quarterLabel(q)+(q===quarterOf(todayISO())?" to date":"")).join(", ");
+  const slug=(days?[...days].sort().join("_"):(F.month.size?months.join("_"):qs.join("_"))).replace(/[^0-9A-Za-z_-]/g,"");
+  const lastDay=m=>m+"-"+String(new Date(+m.slice(0,4),+m.slice(5,7),0).getDate()).padStart(2,"0");
+  const start=days?[...days].sort()[0]:(months[0]?months[0]+"-01":"0000-00-00");
+  const end=days?[...days].sort().pop():(months.length?lastDay(months[months.length-1]):"0000-00-00");
+  return {qs,months,days,has,hasNoDay,elapsed,label,slug,start,end};
+}
+function agentPass(a){
+  return a && (!F.brand.size||F.brand.has(a.brand)) && (!F.loc.size||F.loc.has(a.location)) && (!F.coach.size||F.coach.has(a.coach)) && (!F.agent.size||F.agent.has(a.key));
+}
+
+/* =====================================================================
+   COMPUTE
+   ===================================================================== */
+function compute(){
+  const P=period(), T=CONFIG.targets, st=S.settings;
+  const rows=new Map();
+  const get=key=>{ let r=rows.get(key); if(!r){ const a=S.agents.get(key); r={a,key,name:a.name,brand:a.brand,coach:a.coach,location:a.location,
+    login:0,prod:0,days:0,qa:[],ic:[],ql:[],trainee:false}; rows.set(key,r);} return r; };
+  S.tss.forEach(x=>{ if(!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; const r=get(a.key); r.login+=x.loggedin; r.prod+=x.prod; if(x.loggedin>0) r.days++; });
+  S.qa.forEach(x=>{ if(!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).qa.push(x); });
+  S.intercom.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).ic.push(x); });
+  S.qualtrics.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).ql.push(x); });
+  // roster agents with no activity still appear on the scorecard
+  S.roster.forEach(rr=>{ const a=S.agents.get(norm(rr.name)); if(agentPass(a)) get(a.key); });
+  // 1 qualifying survey per month in the selection (a full quarter = 3)
+  const csatTarget = Math.max(1, P.months.length) * T.csatPerMonth;
+  const csatExpected = Math.min(csatTarget, P.elapsed*T.csatPerMonth);
+  const out=[...rows.values()].map(r=>{
+    r.trainee=isTrainee(r.a,P.start,P.end);
+    r.prodPct = r.login>0 ? r.prod/r.login*100 : NaN;
+    r.qaAvg = r.qa.length ? avg(r.qa.map(x=>x.score)) : NaN;
+    r.qaGoal = r.brand==="Keap"?T.qaKeap:T.qaThryv;
+    r.icQual = r.ic.filter(x=>x.rating>=st.intercomMin).length;
+    r.qlQual = r.ql.filter(x=>x.score>=st.qualtricsMin).length;
+    r.csatQual = r.icQual + r.qlQual;
+    r.csatTotal = r.ic.length + r.ql.length;
+    r.csatTarget=csatTarget; r.csatExpected=csatExpected;
+    r.csatPace = r.csatQual>=csatTarget ? "Met" : (r.csatQual>=csatExpected ? "On pace" : "Behind");
+    const hasCsatSource = S.intercom.length+S.qualtrics.length>0;
+    const pil=[
+      {k:"prod", has:isFinite(r.prodPct), ratio:r.prodPct/T.productive},
+      {k:"qa",   has:isFinite(r.qaAvg),   ratio:r.qaAvg/r.qaGoal},
+      {k:"csat", has:hasCsatSource,       ratio:r.csatQual/csatTarget},
+    ];
+    let wsum=0, total=0, raw={}; r.pts={}; r.met=0; r.missing=[];
+    pil.forEach(p=>{
+      const w=CONFIG.weights[p.k];
+      // no CSAT file loaded at all: leave CSAT out for everyone rather than scoring it 0
+      if(p.k==="csat" && !hasCsatSource){ r.pts[p.k]=null; return; }
+      if(!p.has){ r.missing.push(p.k); raw[p.k]=null; if(st.missing==="zero"){ wsum+=w; raw[p.k]=0; } return; }
+      const met=p.ratio>=1; if(met) r.met++;
+      const e = st.method==="passfail" ? (met?1:0) : Math.max(0,Math.min(1,p.ratio));
+      raw[p.k]=e*w; total+=e*w; wsum+=w;
+    });
+    // points shown per pillar are scaled so they add up to the KPI score (out of 100)
+    Object.keys(raw).forEach(k=>r.pts[k]= raw[k]==null ? null : raw[k]/wsum*100);
+    r.pillarsAvail = hasCsatSource ? 3 : 2;
+    r.total = wsum>0 ? total/wsum*100 : NaN;
+    return r;
+  });
+  return {P, rows:out};
+}
+
+/* =====================================================================
+   RENDER HELPERS
+   ===================================================================== */
+const colorFor=(v,goal)=> !isFinite(v)?"#c7ced6":(v>=goal?"#1f9d55":(v>=goal-5?"#f0a020":"#d64545"));
+const badge=(v,goal,txt)=>{ const c=!isFinite(v)?"b-grey":(v>=goal?"b-green":(v>=goal-5?"b-amber":"b-red")); return `<span class="badge ${c}">${txt}</span>`; };
+const scoreColor=v=> !isFinite(v)?"#c7ced6":(v>=99.95?"#1f9d55":(v>=90?"#f0a020":"#d64545"));
+const paceBadge=(r,txt)=>`<span class="badge ${r.csatPace==="Met"?"b-green":r.csatPace==="On pace"?"b-amber":"b-red"}">${txt}</span>`;
+const brandName=b=>b==="Thryv"?"TSS":b;   // internal value stays "Thryv"; shown as TSS
+const brandTag=b=>`<span class="tag ${b==="Keap"?"keap":"thryv"}">${esc(brandName(b))}</span>`;
+const groupTxt=r=>r.a&&r.a.group?`<span class="pts">${esc(r.a.group)}</span>`:"";
+const trainTag='<span class="tag">In Training</span>';
+function kill(id){ if(S.charts[id]){ S.charts[id].destroy(); delete S.charts[id]; } }
+function goalLine(val,orient,label){ return {id:"g"+Math.random(),afterDraw(c){const{ctx,chartArea:a,scales}=c; ctx.save(); ctx.strokeStyle="#1d2733"; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+  if(orient==="x"){const x=scales.x.getPixelForValue(val); ctx.beginPath(); ctx.moveTo(x,a.top); ctx.lineTo(x,a.bottom); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle="#1d2733"; ctx.font="700 11px Inter,sans-serif"; ctx.fillText(label,x+4,a.top+11);}
+  else{const y=scales.y.getPixelForValue(val); ctx.beginPath(); ctx.moveTo(a.left,y); ctx.lineTo(a.right,y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle="#1d2733"; ctx.font="700 11px Inter,sans-serif"; ctx.fillText(label,a.right-70,y-5);}
+  ctx.restore();}}; }
+/* Writes each bar's value at the end of the bar (inside the bar in white when there is no room outside). */
+function valueLabels(fmt){ return {id:"vl"+Math.random(),afterDatasetsDraw(c){
+  const {ctx,chartArea:a}=c; ctx.save(); ctx.font="700 10.5px Inter,-apple-system,sans-serif"; ctx.textBaseline="middle";
+  c.data.datasets.forEach((ds,di)=>{ const meta=c.getDatasetMeta(di); if(meta.hidden) return;
+    meta.data.forEach((bar,i)=>{ const v=ds.data[i]; if(v==null||!isFinite(v)) return; const t=fmt(v), w=ctx.measureText(t).width;
+      if(bar.x+6+w<=a.right){ ctx.fillStyle="rgba(255,255,255,.9)"; ctx.fillRect(bar.x+3,bar.y-7,w+4,14); ctx.fillStyle="#1d2733"; ctx.fillText(t,bar.x+5,bar.y); }
+      else { ctx.fillStyle="#ffffff"; ctx.fillText(t,bar.x-w-6,bar.y); } }); });
+  ctx.restore(); }}; }
+function hbar(id, boxId, labels, datasets, opts){
+  kill(id); const box=$("#"+boxId); box.style.height=Math.max(160, labels.length*(opts.rowH||20)+60)+"px";
+  if(!labels.length){ box.style.height="120px"; }
+  const plugins=[]; if(opts.goal!=null) plugins.push(goalLine(opts.goal,"x",opts.goalLabel)); if(opts.valueFmt) plugins.push(valueLabels(opts.valueFmt));
+  S.charts[id]=new Chart($("#"+id),{type:"bar",data:{labels,datasets},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,layout:{padding:{right:opts.valueFmt?8:0}},
+      plugins:{legend:{display:!!opts.legend,position:"top",labels:{boxWidth:12,font:{size:11}}},tooltip:{callbacks:opts.tip||{}}},
+      scales:{x:{stacked:!!opts.stacked,min:opts.min??0,max:opts.max,ticks:{callback:opts.xfmt||(v=>v)},grid:{color:"#eef1f4"}},
+              y:{stacked:!!opts.stacked,ticks:{font:{size:10.5},autoSkip:false},grid:{display:false}}}},
+    plugins});
+}
+function setHero(prefix, val, goal, txtFn, fillMax){
+  const v=$(prefix+"Val"), bar=$(prefix+"Bar"), pill=$(prefix+"Pill");
+  if(v) v.textContent=txtFn(val);
+  if(bar){ bar.style.width=(isFinite(val)?Math.min(100,val/(fillMax||100)*100):0)+"%"; bar.style.background=val>=goal?"var(--green)":(val>=goal-5?"var(--amber)":"var(--orange)"); }
+  if(pill){ if(!isFinite(val)){pill.className="pill under";pill.textContent="No data";}
+    else if(val>=goal){pill.className="pill over";pill.textContent="Meeting goal";}
+    else{const g=r1(goal-val);pill.className="pill "+(val>=goal-5?"close":"under");pill.textContent=g+(g===1?" pt":" pts")+" below goal";} }
+}
+function statCards(id, list){ $(id).innerHTML=list.map(s=>`<div class="stat"><div class="top"><span class="slabel">${s.l}</span><span class="dot" style="background:${s.c}"></span></div><div class="sval">${s.v}</div><div class="sdesc">${s.d}</div></div>`).join(""); }
+function sortRows(tbl, rows, defKey, defDir){
+  const s=S.sort[tbl]||{k:defKey,d:defDir};
+  return rows.slice().sort((a,b)=>{ let x=a[s.k],y=b[s.k]; if(typeof x==="number"||typeof y==="number"){ x=isFinite(x)?x:-1e9; y=isFinite(y)?y:-1e9; return (x-y)*s.d; }
+    return String(x||"").localeCompare(String(y||""))*s.d; });
+}
+function bindSort(tbl){ document.querySelectorAll("#"+tbl+" th[data-k]").forEach(th=>th.onclick=()=>{ const k=th.dataset.k; const s=S.sort[tbl]||{};
+  S.sort[tbl]={k,d:s.k===k?-s.d:(th.classList.contains("num")?-1:1)}; renderAll(); }); }
+
+/* =====================================================================
+   RENDER: SCORECARD
+   ===================================================================== */
+function renderScore(C){
+  const T=CONFIG.targets, rows=C.rows, roll=rows.filter(r=>!r.trainee);
+  const scored=roll.filter(r=>isFinite(r.total));
+  const team=avg(scored.map(r=>r.total));
+  setHero("#sHero", team, 100, v=>isFinite(v)?r1(v).toFixed(1):"-", 100);
+  $("#sHeroDesc").textContent=`${C.P.label} · average of ${scored.length} agents · ${S.settings.method==="passfail"?"pass/fail":"proportional"} scoring`;
+  const NP=S.intercom.length+S.qualtrics.length>0?3:2;
+  const all3=roll.filter(r=>r.met===NP).length;
+  $("#sHeroPill").className="pill "+(all3===roll.length&&roll.length?"over":"close");
+  $("#sHeroPill").textContent=`${all3} of ${roll.length} meeting all ${NP}`;
+  if(NP===2) $("#sHeroDesc").textContent+=" · CSAT not scored until an Intercom or Qualtrics file is loaded";
+  // pillars
+  const login=roll.reduce((a,r)=>a+r.login,0), prod=roll.reduce((a,r)=>a+r.prod,0), prodPct=login?prod/login*100:NaN;
+  const qaT=roll.flatMap(r=>r.qa.filter(x=>x.brand==="Thryv").map(x=>x.score)), qaK=roll.flatMap(r=>r.qa.filter(x=>x.brand==="Keap").map(x=>x.score));
+  const metProd=roll.filter(r=>r.prodPct>=T.productive).length, metQA=roll.filter(r=>r.qaAvg>=r.qaGoal).length, metCS=roll.filter(r=>r.csatQual>=r.csatTarget).length;
+  const onPace=roll.filter(r=>r.csatPace!=="Behind").length;
+  const hasCsat=S.intercom.length+S.qualtrics.length>0;
+  const P=[
+    {t:"Productivity",c:"#2e9e5b",v:fmtPct(prodPct),d:`Target ${T.productive}% · ${metProd} of ${roll.filter(r=>isFinite(r.prodPct)).length} agents at target`,fill:prodPct/T.productive},
+    {t:"QA",c:"#3d7bd6",v:`${fmtPct(avg(qaT))} <span class="small">TSS</span> · ${fmtPct(avg(qaK))} <span class="small">Keap</span>`,d:`Goals: TSS ${T.qaThryv}% · Keap ${T.qaKeap}% · ${metQA} of ${roll.filter(r=>isFinite(r.qaAvg)).length} agents at goal`,fill:(roll.filter(r=>isFinite(r.qaAvg)).length?metQA/roll.filter(r=>isFinite(r.qaAvg)).length:0)},
+    {t:"CSAT",c:"#ff5000",v:hasCsat?`${metCS} <span class="small">at goal</span> · ${onPace} <span class="small">on pace</span>`:"No CSAT data yet",d:`${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys (Intercom + Qualtrics) · pacing 1 per month`,fill:roll.length?metCS/roll.length:0},
+  ];
+  $("#pillars").innerHTML=P.map(p=>`<div class="pillar" style="border-top-color:${p.c}"><span class="pw">33.3%</span><div class="klabel">${p.t}</div>
+    <div class="pv">${p.v}</div><div class="pd">${p.d}</div><div class="mini"><div style="width:${Math.min(100,(p.fill||0)*100)}%;background:${p.c}"></div></div></div>`).join("");
+  statCards("#sStats",[
+    {l:"Agents",v:rows.length,d:`${rows.length-roll.length} in training`,c:"#1d2733"},
+    {l:"All Met",v:all3,d:"meeting every pillar",c:"#1f9d55"},
+    {l:"One Short",v:roll.filter(r=>r.met===NP-1).length,d:"missing one pillar",c:"#f0a020"},
+    {l:"Two+ Short",v:roll.filter(r=>r.met<=NP-2).length,d:"needs attention",c:"#d64545"},
+    {l:"CSAT Behind",v:NP===3?roll.filter(r=>r.csatPace==="Behind").length:"-",d:NP===3?"under monthly pacing":"no CSAT file yet",c:"#ff5000"},
+    {l:"Missing Data",v:roll.filter(r=>r.missing.length).length,d:"agents with a blank pillar",c:"#6b7683"},
+  ]);
+  // chart: stacked points by agent
+  const ranked=rows.filter(r=>isFinite(r.total)).sort((a,b)=>a.total-b.total);
+  const pt=(r,k)=>r.pts[k]==null?0:r1(r.pts[k]);
+  hbar("scoreChart","scoreChartBox",ranked.map(r=>r.name+(r.trainee?" (training)":"")),[
+    {label:"Productivity",data:ranked.map(r=>pt(r,"prod")),backgroundColor:"#2e9e5b",barThickness:12},
+    {label:"QA",data:ranked.map(r=>pt(r,"qa")),backgroundColor:"#3d7bd6",barThickness:12},
+    {label:"CSAT",data:ranked.map(r=>pt(r,"csat")),backgroundColor:"#ff5000",barThickness:12},
+  ],{stacked:true,max:100,legend:true,rowH:18,goal:100,goalLabel:"",tip:{footer:items=>"KPI score: "+r1(ranked[items[0].dataIndex].total)}});
+  // coach
+  const byC={}; scored.forEach(r=>(byC[r.coach]=byC[r.coach]||[]).push(r.total));
+  const cl=Object.keys(byC).sort((a,b)=>avg(byC[a])-avg(byC[b])); const cv=cl.map(c=>r1(avg(byC[c])));
+  hbar("coachScoreChart","coachScoreBox",cl,[{data:cv,backgroundColor:cv.map(scoreColor),borderRadius:4,barThickness:16}],{max:100,rowH:26,tip:{label:c=>c.raw+" ("+byC[cl[c.dataIndex]].length+" agents)"}});
+  kill("metChart");
+  const metN=NP===3?[3,2,1,0]:[2,1,0];
+  S.charts.metChart=new Chart($("#metChart"),{type:"bar",data:{labels:metN.map(n=>n+" of "+NP),
+    datasets:[{data:metN.map(n=>roll.filter(r=>r.met===n).length),backgroundColor:["#1f9d55","#f0a020","#e8843b","#d64545"],borderRadius:5,barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
+  // table
+  rows.forEach(r=>{ r.csatSort=r.csatQual; });
+  const sorted=sortRows("scoreTbl",rows,"total",1);
+  const ptsTxt=(r,k)=>r.pts[k]==null?'<span class="pts">no data · not scored</span>':`<span class="pts">${r1(r.pts[k])} pts</span>`;
+  $("#scoreTbl tbody").innerHTML=sorted.map(r=>`<tr>
+    <td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}${groupTxt(r)}</td><td>${esc(r.coach)}</td>
+    <td class="num">${badge(r.prodPct,T.productive,fmtPct(r.prodPct))}${ptsTxt(r,"prod")}</td>
+    <td class="num">${badge(r.qaAvg,r.qaGoal,fmtPct(r.qaAvg))}<span class="pts">${r.qa.length} eval${r.qa.length===1?"":"s"} · goal ${r.qaGoal}%</span></td>
+    <td class="num">${NP===3?paceBadge(r,r.csatQual+" / "+r.csatTarget)+ptsTxt(r,"csat"):'<span class="badge b-grey">No file</span>'}<span class="pts">${NP===3?r.icQual+" Intercom · "+r.qlQual+" Qualtrics":""}</span></td>
+    <td>${NP===3?paceBadge(r,r.csatPace):"-"}</td>
+    <td class="num">${r.met} / ${NP}</td>
+    <td class="num score-cell" style="color:${scoreColor(r.total)}">${isFinite(r.total)?r1(r.total).toFixed(1):"-"}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">No agents in the current view.</td></tr>`;
+  $("#scoreHint").textContent=`${C.P.label}. Productivity ${T.productive}% target · QA goal by brand · CSAT ${rows[0]?rows[0].csatTarget:3} qualifying surveys (expected ${rows[0]?rows[0].csatExpected:0} by now). Agents in training are shown but excluded from team and coach rollups. Click a header to sort.`;
+  bindSort("scoreTbl");
+}
+
+/* =====================================================================
+   RENDER: PRODUCTIVITY
+   ===================================================================== */
+function renderProd(C){
+  const T=CONFIG.targets; const P=C.P;
+  const rows=C.rows.filter(r=>r.login>0), roll=rows.filter(r=>!r.trainee);
+  const login=roll.reduce((a,r)=>a+r.login,0), prod=roll.reduce((a,r)=>a+r.prod,0), pct=login?prod/login*100:NaN;
+  $("#pTargetTxt").textContent=T.productive; $("#pGoalMark").style.left=T.productive+"%"; $("#pGoalMark .goal-txt").textContent=T.productive+"%";
+  setHero("#pHero",pct,T.productive,fmtPct,100);
+  statCards("#pStats",[
+    {l:"Logged In",v:fmtHrs(login).split(":").slice(0,2).join(":"),d:"hours, team total",c:"#1d2733"},
+    {l:"Productive",v:fmtHrs(prod).split(":").slice(0,2).join(":"),d:"hours toward target",c:"#1f9d55"},
+    {l:"Agents",v:rows.length,d:`${rows.length-roll.length} in training`,c:"#3d7bd6"},
+    {l:"At Target",v:roll.filter(r=>r.prodPct>=T.productive).length,d:`agents at ${T.productive}%+`,c:"#1f9d55"},
+    {l:"Below",v:roll.filter(r=>r.prodPct<T.productive).length,d:`agents under ${T.productive}%`,c:"#d64545"},
+    {l:"Lowest",v:fmtPct(Math.min(...roll.map(r=>r.prodPct))),d:"single agent",c:"#d64545"},
+  ]);
+  const ranked=rows.slice().sort((a,b)=>a.prodPct-b.prodPct);
+  hbar("prodAgentChart","prodAgentBox",ranked.map(r=>r.name+(r.trainee?" (training)":"")),[{data:ranked.map(r=>r1(r.prodPct)),backgroundColor:ranked.map(r=>colorFor(r.prodPct,T.productive)),borderRadius:3,barThickness:11}],
+    {max:100,rowH:18,goal:T.productive,goalLabel:T.productive+"% target",xfmt:v=>v+"%",valueFmt:v=>v.toFixed(1)+"%",tip:{label:c=>c.raw+"% · "+fmtHrs(ranked[c.dataIndex].login)+" logged in"}});
+  const byC={}; roll.forEach(r=>{const o=byC[r.coach]=byC[r.coach]||{l:0,p:0,n:0}; o.l+=r.login; o.p+=r.prod; o.n++;});
+  const cl=Object.keys(byC).sort((a,b)=>byC[a].p/byC[a].l-byC[b].p/byC[b].l); const cv=cl.map(c=>r1(byC[c].p/byC[c].l*100));
+  hbar("prodCoachChart","prodCoachBox",cl,[{data:cv,backgroundColor:cv.map(v=>colorFor(v,T.productive)),borderRadius:4,barThickness:16}],{max:100,rowH:28,goal:T.productive,goalLabel:"",xfmt:v=>v+"%",valueFmt:v=>v.toFixed(1)+"%",tip:{label:c=>c.raw+"% ("+byC[cl[c.dataIndex]].n+" agents)"}});
+  // trend: every day in the selected quarters/months; days picked in the Day filter are highlighted
+  const byD={};
+  S.tss.forEach(x=>{ if(!P.hasNoDay(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)||trainingDay(a,x.date)) return;
+    const o=byD[x.date]=byD[x.date]||{l:0,p:0}; o.l+=x.loggedin; o.p+=x.prod; });
+  const ds=Object.keys(byD).sort(); kill("prodTrendChart");
+  const sel=d=>F.day.has(d);
+  S.charts.prodTrendChart=new Chart($("#prodTrendChart"),{type:"line",data:{labels:ds.map(d=>d.slice(5).replace("-","/")),
+    datasets:[{data:ds.map(d=>r1(byD[d].p/byD[d].l*100)),borderColor:"#0f7a3d",backgroundColor:"rgba(31,157,85,.08)",fill:true,tension:.3,borderWidth:2,
+      pointRadius:ds.map(d=>sel(d)?7:2.5),pointHoverRadius:7,pointBackgroundColor:ds.map(d=>sel(d)?"#ff5000":"#0f7a3d"),pointBorderColor:ds.map(d=>sel(d)?"#fff":"#0f7a3d"),pointBorderWidth:ds.map(d=>sel(d)?2:1)}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(e,els)=>{ if(!els.length) return; const d=ds[els[0].index]; if(F.day.has(d)) F.day.delete(d); else F.day.add(d); MS.day.draw(); renderAll(); },
+      onHover:(e,els)=>{ e.native.target.style.cursor=els.length?"pointer":"default"; },
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>dayLabel(ds[it[0].dataIndex]),label:c=>c.raw+"% productive"+(sel(ds[c.dataIndex])?" · selected":""),footer:()=>"Click to "+"select or clear this day"}}},
+      scales:{y:{suggestedMin:60,suggestedMax:95,ticks:{callback:v=>v+"%"},grid:{color:"#eef1f4"}},x:{grid:{display:false},ticks:{maxTicksLimit:14}}}},
+    plugins:[goalLine(T.productive,"y",T.productive+"% target")]});
+  rows.forEach(r=>{r.pct=r.prodPct; r.nonprod=r.login-r.prod;});
+  $("#prodTbl tbody").innerHTML=sortRows("prodTbl",rows,"pct",1).map(r=>`<tr><td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
+    <td class="num">${r.days}</td><td class="num">${fmtHrs(r.login)}</td><td class="num">${fmtHrs(r.prod)}</td><td class="num">${fmtHrs(r.nonprod)}</td>
+    <td class="num">${badge(r.prodPct,T.productive,fmtPct(r.prodPct))}</td></tr>`).join("") || `<tr><td colspan="8" class="empty">No TSS time in the current view.</td></tr>`;
+  bindSort("prodTbl");
+}
+
+/* =====================================================================
+   RENDER: QA
+   ===================================================================== */
+function renderQA(C){
+  const T=CONFIG.targets;
+  const rows=C.rows.filter(r=>r.qa.length), roll=rows.filter(r=>!r.trainee);
+  const ev=roll.flatMap(r=>r.qa);
+  const tS=ev.filter(x=>x.brand==="Thryv").map(x=>x.score), kS=ev.filter(x=>x.brand==="Keap").map(x=>x.score);
+  setHero("#qThryv",avg(tS),T.qaThryv,fmtPct); $("#qThryvDesc").textContent=`Goal ${T.qaThryv}% · ${tS.length} evaluations`;
+  setHero("#qKeap",avg(kS),T.qaKeap,fmtPct); $("#qKeapDesc").textContent=`Goal ${T.qaKeap}% · ${kS.length} evaluations`;
+  const all=rows.flatMap(r=>r.qa.map(x=>x.score));
+  statCards("#qStats",[
+    {l:"Evaluations",v:all.length,d:"in current view",c:"#1d2733"},
+    {l:"Agents",v:rows.length,d:"evaluated",c:"#3d7bd6"},
+    {l:"At Goal",v:roll.filter(r=>r.qaAvg>=r.qaGoal).length,d:"agents at brand goal",c:"#1f9d55"},
+    {l:"Below Goal",v:roll.filter(r=>r.qaAvg<r.qaGoal).length,d:"agents under goal",c:"#d64545"},
+    {l:"Highest",v:(all.length?Math.max(...all):0)+"%",d:"single evaluation",c:"#1f9d55"},
+    {l:"Lowest",v:(all.length?Math.min(...all):0)+"%",d:"single evaluation",c:"#d64545"},
+  ]);
+  const ranked=rows.slice().sort((a,b)=>(a.qaAvg-a.qaGoal)-(b.qaAvg-b.qaGoal));
+  hbar("qaAgentChart","qaAgentBox",ranked.map(r=>r.name+" ("+brandName(r.brand)+")"),[{data:ranked.map(r=>r1(r.qaAvg)),backgroundColor:ranked.map(r=>colorFor(r.qaAvg,r.qaGoal)),borderRadius:3,barThickness:11}],
+    {max:100,rowH:17,xfmt:v=>v+"%",tip:{label:c=>{const r=ranked[c.dataIndex]; return c.raw+"% · goal "+r.qaGoal+"% · "+r.qa.length+" evals";}}});
+  const byC={}; roll.forEach(r=>{(byC[r.coach]=byC[r.coach]||{s:[],g:r.qaGoal}).s.push(...r.qa.map(x=>x.score));});
+  const cl=Object.keys(byC).sort((a,b)=>avg(byC[a].s)-avg(byC[b].s)); const cv=cl.map(c=>r1(avg(byC[c].s)));
+  hbar("qaCoachChart","qaCoachBox",cl,[{data:cv,backgroundColor:cl.map((c,i)=>colorFor(cv[i],byC[c].g)),borderRadius:4,barThickness:16}],{max:100,rowH:26,xfmt:v=>v+"%",tip:{label:c=>c.raw+"% ("+byC[cl[c.dataIndex]].s.length+" evals)"}});
+  const byCh={}; ev.forEach(x=>(byCh[x.channel]=byCh[x.channel]||[]).push(x.score)); const chl=Object.keys(byCh).sort();
+  kill("qaChannelChart");
+  S.charts.qaChannelChart=new Chart($("#qaChannelChart"),{type:"bar",data:{labels:chl,datasets:[{data:chl.map(c=>r1(avg(byCh[c]))),backgroundColor:"#3d7bd6",borderRadius:5,barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+"% ("+byCh[chl[c.dataIndex]].length+" evals)"}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
+  kill("qaDistChart");
+  S.charts.qaDistChart=new Chart($("#qaDistChart"),{type:"bar",data:{labels:["<70","70-79","80-89","90-100"],datasets:[{data:[all.filter(s=>s<70).length,all.filter(s=>s>=70&&s<80).length,all.filter(s=>s>=80&&s<90).length,all.filter(s=>s>=90).length],backgroundColor:["#d64545","#e8843b","#f0a020","#1f9d55"],borderRadius:5,barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
+  rows.forEach(r=>{r.n=r.qa.length; r.avg=r.qaAvg; r.goal=r.qaGoal; r.gap=r.qaAvg-r.qaGoal; r.status=r.qaAvg>=r.qaGoal?"Meeting goal":"Below goal";});
+  $("#qaTbl tbody").innerHTML=sortRows("qaTbl",rows,"gap",1).map(r=>`<tr><td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
+    <td class="num">${r.n}</td><td class="num">${badge(r.qaAvg,r.qaGoal,fmtPct(r.qaAvg))}</td><td class="num">${r.qaGoal}%</td>
+    <td class="num">${r.gap>=0?"-":r1(r.gap)}</td><td><span class="badge ${r.gap>=0?"b-green":"b-red"}">${r.status}</span></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No QA evaluations in the current view.</td></tr>`;
+  bindSort("qaTbl");
+}
+
+/* =====================================================================
+   RENDER: CSAT
+   ===================================================================== */
+function renderCSAT(C){
+  const T=CONFIG.targets, P=C.P, st=S.settings;
+  const rows=C.rows, roll=rows.filter(r=>!r.trainee);
+  const has=S.intercom.length+S.qualtrics.length>0;
+  const met=roll.filter(r=>r.csatQual>=r.csatTarget).length;
+  $("#cHeroVal").textContent=has?(met+" of "+roll.length):"-";
+  $("#cHeroDesc").textContent=`${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys for ${P.months.length} month${P.months.length===1?"":"s"} (1 per month) · Intercom + Qualtrics combined · ${P.label}`;
+  $("#cHeroBar").style.width=(roll.length?met/roll.length*100:0)+"%"; $("#cHeroBar").style.background="var(--orange)";
+  const behind=roll.filter(r=>r.csatPace==="Behind").length;
+  $("#cHeroPill").className="pill "+(!has?"under":behind?"close":"over");
+  $("#cHeroPill").textContent=!has?"Waiting on Intercom / Qualtrics files":(behind?behind+" behind pace":"Everyone on pace");
+  const icAll=roll.flatMap(r=>r.ic), qlAll=roll.flatMap(r=>r.ql);
+  statCards("#cStats",[
+    {l:"Intercom Ratings",v:icAll.length,d:"teammate ratings",c:"#3d7bd6"},
+    {l:"Intercom Qualifying",v:icAll.filter(x=>x.rating>=st.intercomMin).length,d:st.intercomMin===5?"Amazing only":"Great or Amazing",c:"#1f9d55"},
+    {l:"Qualtrics Surveys",v:qlAll.length,d:"responses",c:"#3d7bd6"},
+    {l:"Qualtrics 9-10",v:qlAll.filter(x=>x.score>=st.qualtricsMin).length,d:st.qualtricsMin===10?"10s only":"9s and 10s",c:"#1f9d55"},
+    {l:"On Pace",v:roll.filter(r=>r.csatPace!=="Behind").length,d:`expected ${rows[0]?rows[0].csatExpected:0} by now`,c:"#1f9d55"},
+    {l:"Behind",v:behind,d:"under monthly pacing",c:"#d64545"},
+  ]);
+  const ranked=rows.slice().sort((a,b)=>a.csatQual-b.csatQual||a.name.localeCompare(b.name));
+  hbar("csatAgentChart","csatAgentBox",ranked.map(r=>r.name+(r.trainee?" (training)":"")),[
+    {label:"Intercom",data:ranked.map(r=>r.icQual),backgroundColor:"#3d7bd6",barThickness:11},
+    {label:"Qualtrics",data:ranked.map(r=>r.qlQual),backgroundColor:"#ff5000",barThickness:11}],
+    {stacked:true,legend:true,rowH:17,goal:rows[0]?rows[0].csatTarget:3,goalLabel:"goal",max:Math.max(rows[0]?rows[0].csatTarget+1:4,...ranked.map(r=>r.csatQual+1))});
+  const mix=[1,2,3,4,5].map(n=>icAll.filter(x=>x.rating===n).length);
+  kill("csatMixChart");
+  S.charts.csatMixChart=new Chart($("#csatMixChart"),{type:"bar",data:{labels:["Terrible","Bad","Ok","Great","Amazing"],datasets:[{data:mix,backgroundColor:["#d64545","#e8843b","#c7ced6",st.intercomMin<=4?"#1f9d55":"#9fd5b5","#1f9d55"],borderRadius:5,barThickness:30}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
+  const months=P.months; const qualBy=(arr,test,m)=>arr.filter(x=>monthOf(x.date)===m&&test(x)).length;
+  kill("csatMonthChart");
+  S.charts.csatMonthChart=new Chart($("#csatMonthChart"),{type:"bar",data:{labels:months.map(monthLabel),datasets:[
+    {label:"Intercom",data:months.map(m=>qualBy(icAll,x=>x.rating>=st.intercomMin,m)),backgroundColor:"#3d7bd6",barThickness:34},
+    {label:"Qualtrics",data:months.map(m=>qualBy(qlAll,x=>x.score>=st.qualtricsMin,m)),backgroundColor:"#ff5000",barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top",labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}}}}});
+  // table
+  const mcols=months.map(m=>({k:"m_"+m,t:MON[(+m.slice(5,7))-1]}));
+  $("#csatHeadRow").innerHTML=`<th data-k="name">Agent</th><th data-k="brand">Brand</th><th data-k="coach">Coach</th>
+    <th data-k="icN" class="num">Intercom Ratings</th><th data-k="icQual" class="num">Intercom Qualifying</th>
+    <th data-k="qlN" class="num">Qualtrics Surveys</th><th data-k="qlQual" class="num">Qualtrics 9-10</th>
+    ${mcols.map(c=>`<th data-k="${c.k}" class="num">${c.t}</th>`).join("")}<th data-k="csatQual" class="num">Total Qualifying</th><th data-k="csatPace">Pacing</th>`;
+  rows.forEach(r=>{ r.icN=r.ic.length; r.qlN=r.ql.length; months.forEach(m=>r["m_"+m]=qualBy(r.ic,x=>x.rating>=st.intercomMin,m)+qualBy(r.ql,x=>x.score>=st.qualtricsMin,m)); });
+  $("#csatTbl tbody").innerHTML=sortRows("csatTbl",rows,"csatQual",1).map(r=>`<tr><td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
+    <td class="num">${r.icN}</td><td class="num">${r.icQual}</td><td class="num">${r.qlN}</td><td class="num">${r.qlQual}</td>
+    ${months.map(m=>`<td class="num"><span class="badge ${m>monthOf(todayISO())?"b-grey":(r["m_"+m]>=T.csatPerMonth?"b-green":"b-red")}">${m>monthOf(todayISO())?"-":r["m_"+m]}</span></td>`).join("")}
+    <td class="num">${paceBadge(r,r.csatQual+" / "+r.csatTarget)}</td>
+    <td>${paceBadge(r,r.csatPace)}</td></tr>`).join("") || `<tr><td colspan="12" class="empty">No agents in the current view.</td></tr>`;
+  $("#csatTblHint").textContent=`Qualifying = Intercom ${st.intercomMin===5?"Amazing":"Great or Amazing"}, or Qualtrics ${st.qualtricsMin===10?"10":"9 or 10"}. Monthly cells are green at ${T.csatPerMonth}+ (the pacing target). Intercom ratings are credited to the agent's roster brand, not the conversation's current team.`;
+  bindSort("csatTbl");
+}
+
+/* =====================================================================
+   RENDER: DATA & SETTINGS
+   ===================================================================== */
+function renderData(){
+  const T=CONFIG.targets;
+  $("#setMethod").value=S.settings.method; $("#setIntercom").value=String(S.settings.intercomMin);
+  $("#setQualtrics").value=String(S.settings.qualtricsMin); $("#setMissing").value=S.settings.missing;
+  $("#targetsNote").innerHTML=`<b>Targets in use</b> (edit the CONFIG block in index.html to change): Productive ${T.productive}% · QA TSS ${T.qaThryv}% · QA Keap ${T.qaKeap}% · CSAT ${T.csatPerQuarter} qualifying per quarter, ${T.csatPerMonth} per month pacing · weights 33.3% each.<br>
+    <b>Brand (TSS vs Keap)</b>: taken from each agent's most recent group in TSS Agent Time (Keap Support = Keap, every DR and Delhi group = TSS). Agents not in TSS Agent Time fall back to the QA file they appear in. A roster file, once added, overrides both.<br>
+    <b>Training window</b>: ${TRAINING_START} to ${TRAINING_END} for ${TRAINING_AGENTS.length} agents carried over from the TSS dashboard. Add a <i>Training End</i> date in the roster to manage this per agent.`;
+  const order=["tss","thryvQA","keapQA","intercom","qualtrics","roster"];
+  $("#srcGrid").innerHTML=order.map(k=>{ const c=CONFIG.sources[k], s=S.status[k]||{};
+    const b=s.ok?`<span class="badge b-green">Loaded</span>`:(k==="roster"||k==="intercom"||k==="qualtrics")?`<span class="badge b-amber">Not found</span>`:`<span class="badge b-red">Error</span>`;
+    const where=c.kind==="github-folder"?`github.com/${c.owner}/${c.repo}/${c.path}`:c.url.replace(/^https:\/\/raw\.githubusercontent\.com\//,"github: ");
+    return `<div class="src"><h3>${esc(c.label)} ${b}</h3><p>${s.ok?`<b>${s.rows}</b> rows${s.files?" from "+s.files+" files":""}`:esc(s.error||"Not loaded")}</p>
+      ${s.note?`<p>${esc(s.note)}</p>`:""}${s.uploaded?`<p><b>Uploaded this session:</b> ${esc(s.uploaded)}</p>`:""}<p class="small">${esc(where)}</p></div>`; }).join("");
+  const mt=S.match.slice().sort((a,b)=>(a.to?1:0)-(b.to?1:0)||b.n-a.n);
+  $("#matchTbl tbody").innerHTML=mt.map(m=>`<tr><td>${esc(m.src)}</td><td>${esc(m.raw)}</td><td>${m.to?esc(m.to):'<span class="badge b-red">Unmatched</span>'}</td>
+    <td>${m.to?(/first name/.test(m.method)?`<span class="badge b-amber">${esc(m.method)}</span>`:`<span class="badge b-blue">${esc(m.method)}</span>`):esc(m.method)}</td><td class="num">${m.n}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="empty">Every name matched exactly.</td></tr>`;
+  $("#howNote").innerHTML=`<b>Today (GitHub):</b> TSS time and both QA files are read live from the repos your existing dashboards already use, so they stay in sync with no extra steps. Intercom, Qualtrics and the roster are read from this repo's <b>data</b> folder as <b>intercom.csv</b>, <b>qualtrics.csv</b> and <b>roster.csv</b> (CSV or Excel saved under that name).<br><br>
+    <b>Upload button:</b> drop any of the six exports on the page to preview them before they are committed. The file type is detected from its columns.<br><br>
+    <b>Next step (SharePoint + Power Automate):</b> point each entry in the CONFIG block at its new location. Nothing else in the page needs to change.`;
+}
+
+/* =====================================================================
+   RENDER ALL + EVENTS
+   ===================================================================== */
+function renderAll(){
+  const C=compute();
+  try{ if(S.tab==="score") renderScore(C); else if(S.tab==="prod") renderProd(C); else if(S.tab==="qa") renderQA(C); else if(S.tab==="csat") renderCSAT(C); else renderData(); }
+  catch(e){ console.error(e); }
+  const ok=Object.values(S.status).filter(s=>s.ok).length, tot=Object.keys(S.status).length;
+  const newest=[...S.tss.map(r=>r.date),...S.qa.map(r=>r.date)].filter(Boolean).sort().pop();
+  const up=$("#updated"); up.className="updated"+(ok<tot?" warn":"");
+  up.textContent=(newest?"Data through "+newest:"No data")+` · ${ok} of ${tot} sources loaded`;
+  $("#loaded").textContent=`${S.agents.size} agents · ${S.tss.length.toLocaleString()} agent-days · ${S.qa.length.toLocaleString()} evaluations · ${(S.intercom.length+S.qualtrics.length).toLocaleString()} surveys`;
+  $("#footnote").innerHTML=`Scoring: each pillar is one third of the KPI score. Productive % = (Logged In - Non-Productive) ÷ Logged In, same rules as the TSS dashboard. QA = average evaluation score vs the brand goal. CSAT = qualifying Intercom + Qualtrics surveys vs ${CONFIG.targets.csatPerQuarter} per quarter. ${S.settings.method==="passfail"?"Pass/fail: a pillar earns its full third only when the target is met.":"Proportional: a pillar earns its share of the target, capped at 100%."}`;
+  $("#filterBar").style.display=S.tab==="data"?"none":"flex";
+}
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#tabs button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  S.tab=b.dataset.t; ["score","prod","qa","csat","data"].forEach(t=>$("#tab-"+t).style.display=t===S.tab?"block":"none");
+  renderAll();
+});
+$("#btnClear").onclick=()=>{ Object.values(F).forEach(s=>s.clear()); F.quarter.add(quarterOf(todayISO())); populateFilters(); renderAll(); };
+$("#setMethod").onchange=e=>{S.settings.method=e.target.value;saveSettings();renderAll();};
+$("#setIntercom").onchange=e=>{S.settings.intercomMin=+e.target.value;saveSettings();renderAll();};
+$("#setQualtrics").onchange=e=>{S.settings.qualtricsMin=+e.target.value;saveSettings();renderAll();};
+$("#setMissing").onchange=e=>{S.settings.missing=e.target.value;saveSettings();renderAll();};
+
+/* ---- upload: detect the file type from its columns ---- */
+$("#fileIn").onchange=async e=>{
+  const files=[...e.target.files]; const tssBufs=[];
+  for(const f of files){
+    const buf=await f.arrayBuffer(); let rows; try{ rows=bufToRows(buf); }catch(err){ alert("Could not read "+f.name); continue; }
+    const flat=rows.slice(0,15).map(r=>r.map(c=>String(c).toLowerCase()).join("|")).join("\n");
+    try{
+      if(flat.includes("start time")||flat.includes("transaction id")){ tssBufs.push(buf); }
+      else if(flat.includes("agent name")&&flat.includes("score")){ const recs=qaFromRows(rows); const keap=recs.some(r=>r.brand==="Keap");
+        const k=keap?"keapQA":"thryvQA"; S.qa=S.qa.filter(r=>r.brand!==(keap?"Keap":"Thryv")).concat(recs); S.status[k]={...S.status[k],ok:true,rows:recs.length,uploaded:f.name}; }
+      else if(flat.includes("teammate")&&flat.includes("rating")){ S.intercom=intercomFromRows(rows); S.status.intercom={ok:true,rows:S.intercom.length,uploaded:f.name}; }
+      else if(/brand|coach/.test(flat)&&/(^|\|)agent(\||$)|agent name|full name/.test(flat)){ S.roster=rosterFromRows(rows); S.status.roster={ok:true,rows:S.roster.length,uploaded:f.name}; }
+      else { const fd=(f.name.match(/(\d{4}-\d{2}-\d{2})/)||[])[1]||""; const q=qualtricsFromRows(rows,fd); S.qualtrics=q.rows; S.status.qualtrics={ok:true,rows:q.rows.length,uploaded:f.name,note:qualtricsNote(q)}; }
+    }catch(err){ alert(f.name+": "+err.message); }
+  }
+  if(tssBufs.length){ const extra=tssMerge(tssBufs.map(b=>tssParse(b))); const k=new Set(extra.map(r=>r.date+"|"+r.agent));
+    S.tss=S.tss.filter(r=>!k.has(r.date+"|"+r.agent)).concat(extra); S.status.tss={...S.status.tss,ok:true,rows:S.tss.length,uploaded:files.filter(f=>/xlsx?$/i.test(f.name)).map(f=>f.name).join(", ")}; }
+  e.target.value=""; buildModel();
+};
+
+/* ---- exports ---- */
+$("#btnExport").onclick=()=>{
+  if(typeof XLSX==="undefined"){alert("Excel library still loading, try again in a moment.");return;}
+  const C=compute(), wb=XLSX.utils.book_new(), T=CONFIG.targets;
+  const head=["Agent","Brand","Coach","Location","In Training","Productive %","Productivity Pts","QA Avg %","QA Evals","QA Goal %","QA Pts","Intercom Ratings","Intercom Qualifying","Qualtrics Surveys","Qualtrics Qualifying","CSAT Qualifying","CSAT Target","CSAT Pacing","CSAT Pts","Pillars Met","KPI Score"];
+  const n=v=>isFinite(v)?r1(v):"";
+  const rows=C.rows.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>[r.name,brandName(r.brand),r.coach,r.location,r.trainee?"Yes":"",n(r.prodPct),n(r.pts.prod),n(r.qaAvg),r.qa.length,r.qaGoal,n(r.pts.qa),r.ic.length,r.icQual,r.ql.length,r.qlQual,r.csatQual,r.csatTarget,r.csatPace,n(r.pts.csat),r.met,n(r.total)]);
+  const meta=[["Support KPI Scorecard · TSS & Keap"],["Period",C.P.label],["Generated",new Date().toLocaleString("en-US")],["Scoring",S.settings.method],
+    ["Targets",`Productive ${T.productive}% · QA TSS ${T.qaThryv}% / Keap ${T.qaKeap}% · CSAT ${T.csatPerQuarter} per quarter`],[]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...meta,head,...rows]),"Scorecard");
+  const um=[["Source","Name in Source","Matched To","Method","Rows"],...S.match.map(m=>[m.src,m.raw,m.to,m.method,m.n])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(um),"Name Matching");
+  XLSX.writeFile(wb,"Support_KPI_Scorecard_"+(C.P.slug.length>60?C.P.slug.slice(0,60):C.P.slug)+".xlsx");
+};
+$("#btnRoster").onclick=()=>{
+  const rows=[["Agent","Brand","Coach","Location","Training End","Aliases"]];
+  const al={}; S.match.filter(m=>m.to).forEach(m=>(al[m.to]=al[m.to]||new Set()).add(m.raw));
+  [...S.agents.values()].sort((a,b)=>a.brand.localeCompare(b.brand)||a.name.localeCompare(b.name)).forEach(a=>{
+    const tr=TRAINING_AGENTS.some(n=>norm(n)===a.key)?TRAINING_END:(a.trainingEnd||"");
+    rows.push([a.name,brandName(a.brand),a.coach,a.location,tr,[...(al[a.name]||[]),...a.aliases].join("; ")]); });
+  const csv=rows.map(r=>r.map(v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(",")).join("\n");
+  const url=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"})); const a=document.createElement("a"); a.href=url; a.download="roster.csv"; a.click(); URL.revokeObjectURL(url);
+};
+
+/* ---- boot ---- */
+loadSettings();
+if(typeof Chart!=="undefined"){ Chart.defaults.font.family="Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"; Chart.defaults.color="#6b7683"; }
+loadAll();
+</script>
+</body>
+</html>
