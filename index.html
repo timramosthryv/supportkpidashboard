@@ -6,18 +6,67 @@
 <title>Support KPI Scorecard · TSS &amp; Keap</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<!--
+  v2 CHANGE LOG (search the file for "v2:" to find each change)
+  DATA
+  1. CSAT pacing counts completed months only, measured through the date of the latest CSAT data
+     (not today's date). Because CSAT is exported and uploaded by hand, pacing waits for the upload.
+  2. Agents without Productivity data or with fewer than CONFIG.targets.minQaEvals QA evaluations show
+     "Not enough data" and are left out of team, coach and pillar rollups (setting on Data & Settings).
+  3. QA scores are no longer rounded before averaging; rounding happens only for display.
+  4. Data checks panel: repeated QA transaction IDs, unmatched names, CSAT coverage, Qualtrics date note.
+  LOOK (matches the PCSM Talk Time dashboard)
+  5. Three-box summary strip at the top.
+  6. Change vs. the prior period and weekly sparklines on the hero and pillar cards.
+  7. Clickable status tiles that filter the Agent Scorecard.
+  8. KPI ranking with team-average line, plus top five / bottom five.
+  9. Agent detail panel: click any agent name or ranking bar.
+ 10. Dark mode, Inter font loaded, neutral coach colors with an average line, optional team score goal.
+-->
 <style>
   :root{
     --orange:#ff5000; --orange-soft:#fff1ea;
     --green:#1f9d55; --green-soft:#e7f6ee;
     --red:#d64545; --red-soft:#fbeaea;
-    --amber:#f0a020; --amber-soft:#fdf3e2;
+    --amber:#f0a020; --amber-soft:#fdf3e2; --amber-ink:#b9770a;
     --blue:#3d7bd6; --blue-soft:#eaf1fb;
     --ink:#1d2733; --muted:#6b7683; --line:#e7ebf0; --bg:#f4f5f7; --card:#ffffff;
+    --track:#eef1f4; --hover:#f5f7f9; --note:#f7f9fb;
+    --prod:#2e9e5b; --qa:#3d7bd6; --csat:#ff5000;
+    --shadow:0 1px 2px rgba(20,30,45,.04);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --orange:#ff6a28; --orange-soft:#2e1a10;
+      --green:#4ec07d; --green-soft:#12291d;
+      --red:#f0867c; --red-soft:#2e1817;
+      --amber:#e0a63c; --amber-soft:#2b2211; --amber-ink:#e0a63c;
+      --blue:#6ca3ea; --blue-soft:#15202e;
+      --ink:#e7ecf3; --muted:#95a1b0; --line:#28313c; --bg:#11151a; --card:#192027;
+      --track:#232c36; --hover:#1f2730; --note:#1c242c;
+      --prod:#4ec07d; --qa:#6ca3ea; --csat:#ff6a28;
+      --shadow:0 1px 2px rgba(0,0,0,.4);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --orange:#ff6a28; --orange-soft:#2e1a10;
+    --green:#4ec07d; --green-soft:#12291d;
+    --red:#f0867c; --red-soft:#2e1817;
+    --amber:#e0a63c; --amber-soft:#2b2211; --amber-ink:#e0a63c;
+    --blue:#6ca3ea; --blue-soft:#15202e;
+    --ink:#e7ecf3; --muted:#95a1b0; --line:#28313c; --bg:#11151a; --card:#192027;
+    --track:#232c36; --hover:#1f2730; --note:#1c242c;
+    --prod:#4ec07d; --qa:#6ca3ea; --csat:#ff6a28;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+    color-scheme:dark;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
-    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:var(--blue)}
   .wrap{max-width:1240px;margin:0 auto;padding:26px 22px 60px;}
   .head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:16px;flex-wrap:wrap;}
   .brand{display:flex;align-items:flex-start;gap:16px;}
@@ -26,83 +75,101 @@
   h1{font-size:22px;margin:0 0 3px;font-weight:700;letter-spacing:-.2px;}
   .sub{color:var(--muted);font-size:13.5px;margin:0;}
   .updated{color:var(--green);font-size:12.5px;margin:6px 0 0;font-weight:600;}
-  .updated.warn{color:#b9770a;}
+  .updated.warn{color:var(--amber-ink);}
   .head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .loaded{color:var(--muted);font-size:12px;text-align:right;max-width:280px;}
-  button.btn,label.btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 14px;
-    font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;transition:.15s;display:inline-block;}
-  button.btn:hover,label.btn:hover{border-color:#cbd3dc;background:#fbfcfd;}
+  button.btn,label.btn{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:8px 14px;
+    font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;transition:.15s;display:inline-block;font-family:inherit;}
+  button.btn:hover,label.btn:hover{border-color:var(--orange);}
   /* tabs */
   .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto;}
   .tabs button{border:0;background:transparent;padding:11px 16px;font-size:13.5px;font-weight:700;color:var(--muted);
-    cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;}
+    cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;font-family:inherit;}
+  .tabs button:hover{color:var(--ink);}
   .tabs button.on{color:var(--ink);border-bottom-color:var(--orange);}
   /* filter bar */
   .filters{background:var(--card);border:1px solid var(--line);border-radius:14px;
-    padding:16px 18px;display:flex;flex-wrap:wrap;gap:16px 20px;align-items:flex-end;margin-bottom:18px;
-    box-shadow:0 1px 2px rgba(20,30,45,.04);}
+    padding:16px 18px;display:flex;flex-wrap:wrap;gap:16px 20px;align-items:flex-end;margin-bottom:18px;box-shadow:var(--shadow);}
   .fld{display:flex;flex-direction:column;gap:6px;}
   .fld label{font-size:10.5px;letter-spacing:.6px;color:var(--muted);font-weight:700;text-transform:uppercase;}
-  select{border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 11px;font-size:13.5px;
-    background:#fff;color:var(--ink);min-width:140px;cursor:pointer;-webkit-appearance:none;appearance:none;
+  select{border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 11px;font-size:13.5px;font-family:inherit;
+    background:var(--card);color:var(--ink);min-width:140px;cursor:pointer;-webkit-appearance:none;appearance:none;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7683' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");
     background-repeat:no-repeat;background-position:right 10px center;}
-  .spacer{flex:1;}
-  /* multi-select (same pattern as the QA dashboards) */
   .ms{position:relative;}
-  .ms-btn{border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 11px;font-size:13.5px;
-    background:#fff;color:var(--ink);min-width:140px;max-width:220px;text-align:left;cursor:pointer;position:relative;
+  .ms-btn{border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 11px;font-size:13.5px;font-family:inherit;
+    background:var(--card);color:var(--ink);min-width:140px;max-width:220px;text-align:left;cursor:pointer;position:relative;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ms-btn:hover{border-color:var(--orange);}
   .ms-btn.active{border-color:var(--orange);background:var(--orange-soft);}
   .ms-btn::after{content:"";position:absolute;right:10px;top:50%;width:12px;height:12px;transform:translateY(-50%);
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7683' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;}
-  .ms-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:30;background:#fff;border:1px solid var(--line);
+  .ms-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:30;background:var(--card);border:1px solid var(--line);
     border-radius:10px;box-shadow:0 8px 24px rgba(20,30,45,.14);padding:8px;min-width:210px;max-height:320px;overflow:auto;}
   .ms-panel label{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;
     color:var(--ink);text-transform:none;letter-spacing:0;font-weight:500;cursor:pointer;white-space:nowrap;}
-  .ms-panel label:hover{background:#f5f7f9;}
+  .ms-panel label:hover{background:var(--hover);}
   .ms-panel .ms-all{border-bottom:1px solid var(--line);margin-bottom:4px;padding-bottom:8px;font-weight:700;}
   .ms-panel input[type=checkbox]{width:15px;height:15px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;}
-  .ms-search{width:100%;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:13px;margin-bottom:6px;}
-  .clearall{border:0;background:none;color:var(--orange);font-weight:700;font-size:12.5px;cursor:pointer;padding:8px 4px;}
+  .ms-search{width:100%;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:13px;margin-bottom:6px;background:var(--card);color:var(--ink);}
+  .clearall{border:0;background:none;color:var(--orange);font-weight:700;font-size:12.5px;cursor:pointer;padding:8px 4px;font-family:inherit;}
+  /* v2: summary strip */
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+  .callout{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:12px;
+    padding:13px 15px;cursor:pointer;box-shadow:var(--shadow);transition:box-shadow .15s;}
+  .callout:hover,.callout:focus{box-shadow:0 0 0 2px var(--orange-soft),var(--shadow);outline:none;}
+  .callout.bad{border-left-color:var(--red);} .callout.warn{border-left-color:var(--amber);}
+  .callout.ok{border-left-color:var(--green);} .callout.info{border-left-color:var(--blue);}
+  .callout .ct{font-size:10.5px;letter-spacing:.5px;color:var(--muted);font-weight:700;text-transform:uppercase;}
+  .callout .cb{font-size:14.5px;font-weight:700;margin-top:5px;line-height:1.35;}
+  .callout .cn{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.45;}
   /* hero */
   .hero{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;
-    margin-bottom:16px;display:flex;align-items:center;gap:26px;box-shadow:0 1px 2px rgba(20,30,45,.04);flex-wrap:wrap;}
+    margin-bottom:16px;display:flex;align-items:center;gap:26px;box-shadow:var(--shadow);flex-wrap:wrap;}
   .hero .kpi{min-width:210px;}
   .klabel{font-size:11px;letter-spacing:.6px;color:var(--muted);font-weight:700;text-transform:uppercase;}
-  .kval{font-size:44px;font-weight:800;line-height:1.05;margin:4px 0 2px;letter-spacing:-1px;}
+  .kval{font-size:44px;font-weight:800;line-height:1.05;margin:4px 0 2px;letter-spacing:-1px;font-variant-numeric:tabular-nums;}
   .kdesc{font-size:12.5px;color:var(--muted);}
   .bar-wrap{flex:1;position:relative;min-width:220px;}
-  .bar-track{height:14px;background:#eef1f4;border-radius:20px;overflow:hidden;}
+  .bar-track{height:14px;background:var(--track);border-radius:20px;overflow:hidden;}
   .bar-fill{height:100%;border-radius:20px;transition:width .5s;}
   .goal-mark{position:absolute;top:-6px;transform:translateX(-50%);text-align:center;}
   .goal-line{width:2px;height:26px;background:var(--ink);margin:0 auto;}
   .goal-txt{font-size:11px;font-weight:700;color:var(--ink);margin-top:2px;white-space:nowrap;}
+  .hero .spark{max-width:260px;}
   .pill{flex-shrink:0;padding:9px 16px;border-radius:20px;font-size:13.5px;font-weight:700;}
   .pill.under{background:var(--red-soft);color:var(--red);}
   .pill.over{background:var(--green-soft);color:var(--green);}
-  .pill.close{background:var(--amber-soft);color:#b9770a;}
+  .pill.close{background:var(--amber-soft);color:var(--amber-ink);}
+  .pill.neutral{background:var(--blue-soft);color:var(--blue);}
+  /* v2: deltas and sparklines */
+  .delta{font-size:11.5px;font-weight:700;margin:3px 0;}
+  .delta.up{color:var(--green);} .delta.down{color:var(--red);} .delta.flat{color:var(--muted);font-weight:600;}
+  .spark{display:block;width:100%;height:28px;margin-top:8px;}
   /* pillar cards */
   .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
   .pillar{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;
-    box-shadow:0 1px 2px rgba(20,30,45,.04);border-top:4px solid var(--blue);}
-  .pillar .pw{float:right;font-size:11px;font-weight:700;color:var(--muted);background:#f1f3f6;border-radius:6px;padding:3px 7px;}
+    box-shadow:var(--shadow);border-top:4px solid var(--blue);}
+  .pillar .pw{float:right;font-size:11px;font-weight:700;color:var(--muted);background:var(--track);border-radius:6px;padding:3px 7px;}
   .pillar .pv{font-size:30px;font-weight:800;margin:8px 0 2px;letter-spacing:-.6px;}
   .pillar .pd{font-size:12px;color:var(--muted);line-height:1.45;}
-  .pillar .mini{height:8px;background:#eef1f4;border-radius:10px;overflow:hidden;margin-top:10px;}
+  .pillar .mini{height:8px;background:var(--track);border-radius:10px;overflow:hidden;margin-top:10px;}
   .pillar .mini div{height:100%;border-radius:10px;}
-  /* stat cards */
+  /* stat cards and v2 tiles */
   .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
-  .stat{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:15px 16px;
-    box-shadow:0 1px 2px rgba(20,30,45,.04);}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:15px 16px;box-shadow:var(--shadow);}
   .stat .top{display:flex;align-items:center;justify-content:space-between;}
   .stat .slabel{font-size:11px;letter-spacing:.4px;color:var(--muted);font-weight:700;text-transform:uppercase;}
   .dot{width:9px;height:9px;border-radius:50%;}
   .stat .sval{font-size:24px;font-weight:800;margin:8px 0 2px;letter-spacing:-.5px;}
   .stat .sdesc{font-size:11.5px;color:var(--muted);}
+  .stat.tile{cursor:pointer;border-top:4px solid var(--muted);transition:box-shadow .15s;}
+  .stat.tile:hover{box-shadow:0 0 0 2px var(--orange-soft);}
+  .stat.tile.on{box-shadow:0 0 0 2px var(--orange);}
+  .tilehint{font-size:12.5px;color:var(--muted);margin:-8px 0 16px;}
+  .linkish{color:var(--orange);cursor:pointer;font-weight:600;}
   /* panels */
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;
-    margin-bottom:16px;box-shadow:0 1px 2px rgba(20,30,45,.04);}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow);}
   .panel h2{font-size:16px;margin:0 0 2px;font-weight:700;}
   .panel .pdesc{font-size:12.5px;color:var(--muted);margin:0 0 16px;line-height:1.5;}
   .grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px;}
@@ -117,17 +184,19 @@
   th:hover{color:var(--ink);}
   th.nosort{cursor:default;}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tbody tr:hover{background:var(--hover);}
   .tblwrap{overflow-x:auto;max-height:720px;overflow-y:auto;}
-  .tblwrap thead th{position:sticky;top:0;background:#fff;z-index:1;}
+  .tblwrap thead th{position:sticky;top:0;background:var(--card);z-index:1;}
   .badge{display:inline-block;min-width:46px;text-align:center;padding:3px 8px;border-radius:7px;font-weight:700;font-size:12px;white-space:nowrap;}
   .b-green{background:var(--green-soft);color:var(--green);}
-  .b-amber{background:var(--amber-soft);color:#b9770a;}
+  .b-amber{background:var(--amber-soft);color:var(--amber-ink);}
   .b-red{background:var(--red-soft);color:var(--red);}
-  .b-grey{background:#eef1f4;color:#5b6470;}
+  .b-grey{background:var(--track);color:var(--muted);}
   .b-blue{background:var(--blue-soft);color:var(--blue);}
-  .tag{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;background:#eef1f4;color:#5b6470;vertical-align:middle;}
-  .tag.keap{background:#eaf6ec;color:#2d7a3e;}
-  .tag.thryv{background:var(--orange-soft);color:#c43d00;}
+  .tag{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;background:var(--track);color:var(--muted);vertical-align:middle;}
+  .tag.keap{background:var(--green-soft);color:var(--green);}
+  .tag.thryv{background:var(--orange-soft);color:var(--orange);}
+  .tag.low{background:var(--amber-soft);color:var(--amber-ink);}
   .small{font-size:11.5px;color:var(--muted);}
   .pts{font-size:11px;color:var(--muted);display:block;margin-top:2px;}
   .score-cell{font-weight:800;font-size:14px;}
@@ -138,11 +207,23 @@
   .src p{margin:3px 0;font-size:12px;color:var(--muted);line-height:1.45;word-break:break-word;}
   .setgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 24px;}
   .setgrid .fld select{min-width:100%;}
-  .note{background:#f7f9fb;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.55;}
+  .note{background:var(--note);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.55;}
   .empty{padding:30px;text-align:center;color:var(--muted);font-size:13px;}
   .loadingbar{position:fixed;top:0;left:0;height:3px;background:var(--orange);width:0;transition:width .4s;z-index:99;}
+  /* v2: agent links and detail drawer */
+  .csm{cursor:pointer;border-bottom:1px dotted var(--muted);}
+  .csm:hover{color:var(--orange);border-bottom-color:var(--orange);}
+  .backdrop{position:fixed;inset:0;background:rgba(10,15,25,.38);z-index:40;}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(680px,100%);background:var(--bg);z-index:50;
+    box-shadow:-8px 0 30px rgba(0,0,0,.18);transform:translateX(105%);transition:transform .22s ease;overflow-y:auto;padding:22px;}
+  .drawer.open{transform:none;}
+  .dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;}
+  .dstats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+  .dstats .sval{font-size:19px;}
+  .drawer .panel{padding:16px 18px;}
+  .hide{display:none!important;}
   @media(max-width:980px){.stats{grid-template-columns:repeat(3,1fr)}.grid2,.grid2e{grid-template-columns:1fr}
-    .pillars,.srcgrid{grid-template-columns:1fr}.setgrid{grid-template-columns:1fr}}
+    .pillars,.srcgrid,.summary{grid-template-columns:1fr}.setgrid{grid-template-columns:1fr}.dstats{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:560px){.wrap{padding:18px 16px 40px}.stats{grid-template-columns:repeat(2,1fr)}.kval{font-size:36px}}
 </style>
 </head>
@@ -152,7 +233,7 @@
 
   <div class="head">
     <div class="brand">
-      <img src="thryv-logo.png" alt="Thryv" class="logo-img" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','&lt;div class=\'logo\'&gt;thryv&lt;/div&gt;')" />
+      <img src="thryv-logo.png" alt="Thryv" class="logo-img" onerror="if(!this.dataset.r){this.dataset.r=1;this.src='https://raw.githubusercontent.com/timramosthryv/supportkpidashboard/main/thryv-logo.png'}else{this.style.display='none';this.insertAdjacentHTML('afterend','&lt;div class=\'logo\'&gt;thryv&lt;/div&gt;')}" />
       <div>
         <h1>Support KPI Scorecard · TSS &amp; Keap</h1>
         <p class="sub">Customer Success &amp; Enablement · Productivity, QA and CSAT in one view</p>
@@ -161,12 +242,16 @@
     </div>
     <div class="head-actions">
       <div class="loaded" id="loaded"></div>
+      <button class="btn" id="btnTheme" title="Toggle light and dark">&#9680;</button>
       <label class="btn" for="fileIn">&#8679; Upload</label>
       <input type="file" id="fileIn" multiple accept=".xlsx,.xls,.csv" style="display:none" />
       <button class="btn" id="btnExport">&#8681; Export Excel</button>
       <button class="btn" onclick="location.reload()">&#8635; Refresh</button>
     </div>
   </div>
+
+  <!-- v2: executive summary strip -->
+  <div class="summary" id="summary"></div>
 
   <div class="tabs" id="tabs">
     <button data-t="score" class="on">Scorecard</button>
@@ -193,34 +278,43 @@
       <div class="kpi">
         <div class="klabel">Team KPI Score</div>
         <div class="kval" id="sHeroVal">-</div>
+        <div id="sHeroDelta"></div>
         <div class="kdesc" id="sHeroDesc">Average agent score · 3 pillars weighted equally</div>
       </div>
       <div class="bar-wrap">
         <div class="bar-track"><div class="bar-fill" id="sHeroBar"></div></div>
-        <div class="goal-mark" style="left:100%"><div class="goal-line"></div><div class="goal-txt">100</div></div>
+        <div id="sHeroGoal"></div>
+        <div id="sHeroSpark"></div>
       </div>
       <div class="pill" id="sHeroPill">-</div>
     </div>
     <div class="pillars" id="pillars"></div>
+    <!-- v2: clickable status tiles -->
     <div class="stats" id="sStats"></div>
+    <div class="tilehint" id="tileHint"></div>
     <div class="grid2">
       <div class="panel">
         <h2>KPI Score by Agent</h2>
-        <p class="pdesc">Stacked by pillar. Each pillar is worth one third of the score.</p>
+        <p class="pdesc">Stacked by pillar, highest first. The dashed line is the team average. Click a bar or any name for detail.</p>
         <div class="scrollchart"><div class="chartbox" id="scoreChartBox"><canvas id="scoreChart"></canvas></div></div>
       </div>
       <div>
         <div class="panel" style="margin-bottom:16px;">
           <h2>Average by Coach</h2>
-          <p class="pdesc">Average agent KPI score by coach. Agents in training are excluded.</p>
+          <p class="pdesc">Average agent KPI score by coach. Agents in training and agents without enough data are excluded. Dashed line is the team average.</p>
           <div class="chartbox" id="coachScoreBox"><canvas id="coachScoreChart"></canvas></div>
         </div>
         <div class="panel">
           <h2>Pillars Met</h2>
-          <p class="pdesc">How many agents are meeting 3, 2, 1 or 0 of the pillar targets.</p>
+          <p class="pdesc">How many scored agents are meeting 3, 2, 1 or 0 of the pillar targets.</p>
           <div class="chartbox" style="height:190px"><canvas id="metChart"></canvas></div>
         </div>
       </div>
+    </div>
+    <!-- v2: top five / bottom five -->
+    <div class="grid2e">
+      <div class="panel"><h2>Top five</h2><p class="pdesc" id="topNote"></p><div class="tblwrap"><table id="topTbl"></table></div></div>
+      <div class="panel"><h2>Bottom five</h2><p class="pdesc" id="botNote"></p><div class="tblwrap"><table id="botTbl"></table></div></div>
     </div>
     <div class="panel">
       <h2>Agent Scorecard</h2>
@@ -232,10 +326,10 @@
           <th data-k="coach">Coach</th>
           <th data-k="prodPct" class="num">Productive %</th>
           <th data-k="qaAvg" class="num">QA Avg</th>
-          <th data-k="csatQual" class="num">CSAT 9-10</th>
+          <th data-k="csatQual" class="num">CSAT Qualifying</th>
           <th data-k="csatPace">CSAT Pacing</th>
-          <th data-k="met" class="num">Pillars Met</th>
-          <th data-k="total" class="num">KPI Score</th>
+          <th data-k="metSort" class="num">Pillars Met</th>
+          <th data-k="totalSort" class="num">KPI Score</th>
         </tr></thead>
         <tbody></tbody>
       </table></div>
@@ -337,7 +431,7 @@
     </div>
     <div class="panel">
       <h2>Agent QA Scorecard</h2>
-      <p class="pdesc">Ranked lowest to highest. For evaluation-level detail, see the <a href="https://timramosthryv.github.io/thryv-support-evaluations/" target="_blank" rel="noopener">Thryv</a> and <a href="https://timramosthryv.github.io/keap-support-qa-evaluations/" target="_blank" rel="noopener">Keap</a> QA dashboards.</p>
+      <p class="pdesc" id="qaTblHint">Ranked lowest to highest. For evaluation-level detail, see the <a href="https://timramosthryv.github.io/thryv-support-evaluations/" target="_blank" rel="noopener">Thryv</a> and <a href="https://timramosthryv.github.io/keap-support-qa-evaluations/" target="_blank" rel="noopener">Keap</a> QA dashboards.</p>
       <div class="tblwrap"><table id="qaTbl">
         <thead><tr>
           <th data-k="name">Agent</th><th data-k="brand">Brand</th><th data-k="coach">Coach</th>
@@ -411,13 +505,21 @@
             <option value="9">9 or 10</option>
             <option value="10">10 only</option>
           </select></div>
-        <div class="fld"><label>Agent with no data for a pillar</label>
+        <div class="fld"><label>Agent with missing data</label>
           <select id="setMissing">
-            <option value="reweight">Leave it out and re-weight the other pillars</option>
-            <option value="zero">Score that pillar as 0</option>
+            <option value="require">Not scored until Productivity and QA both have enough data (recommended)</option>
+            <option value="reweight">Score the pillars that have data and re-weight them</option>
+            <option value="zero">Score a missing pillar as 0</option>
           </select></div>
       </div>
       <div class="note" style="margin-top:16px" id="targetsNote"></div>
+    </div>
+
+    <!-- v2: data checks -->
+    <div class="panel">
+      <h2>Data Checks</h2>
+      <p class="pdesc">Run on every load. Review anything amber or red before the numbers are shared.</p>
+      <div class="tblwrap"><table id="dqTbl"></table></div>
     </div>
 
     <div class="srcgrid" id="srcGrid"></div>
@@ -443,6 +545,34 @@
   <p class="footnote" id="footnote"></p>
 </div>
 
+<!-- v2: agent detail drawer -->
+<div id="backdrop" class="backdrop hide"></div>
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <div class="dhead">
+    <div><h2 id="dTitle" style="font-size:19px;margin:0 0 4px"></h2><div class="sub" id="dSub"></div></div>
+    <button class="btn" id="dClose" title="Close (Esc)">&#10005;</button>
+  </div>
+  <div class="dstats" id="dStats"></div>
+  <div class="panel">
+    <h2>Daily Productive %</h2>
+    <p class="pdesc">Selected period. Dashed line is the target.</p>
+    <div class="chartbox" style="height:200px"><canvas id="dProdChart"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>Where the Time Went</h2>
+    <p class="pdesc">Hours by 8x8 status in the selected period, as a share of logged-in time.</p>
+    <div class="tblwrap" style="max-height:320px"><table id="dTime"></table></div>
+  </div>
+  <div class="panel">
+    <h2>QA Evaluations</h2>
+    <div class="tblwrap" style="max-height:320px"><table id="dQA"></table></div>
+  </div>
+  <div class="panel">
+    <h2>CSAT Surveys</h2>
+    <div class="tblwrap" style="max-height:320px"><table id="dCSAT"></table></div>
+  </div>
+</aside>
+
 <script>
 /* =====================================================================
    CONFIG · edit this block when sources move (e.g. to SharePoint)
@@ -459,7 +589,9 @@ const CONFIG = {
     qualtrics:{ label:"Qualtrics Survey", kind:"file", url:"data/qualtrics.csv" },
     roster:   { label:"Agent Roster", kind:"file", url:"data/roster.csv" },
   },
-  targets: { productive:75, qaThryv:93, qaKeap:90, csatPerQuarter:3, csatPerMonth:1 },
+  // v2: minQaEvals = evaluations an agent needs before QA counts toward a KPI score.
+  //     teamScoreGoal = optional goal for the Team KPI Score (null hides the goal marker).
+  targets: { productive:75, qaThryv:93, qaKeap:90, csatPerQuarter:3, csatPerMonth:1, minQaEvals:3, teamScoreGoal:null },
   weights: { prod:1/3, qa:1/3, csat:1/3 },
   // Optional: force the Qualtrics column names if auto-detect picks the wrong ones
   // Qualtrics: the KPI counts 9s and 10s on "Likely to Hire" only.
@@ -472,6 +604,9 @@ const CONFIG = {
   // and listed under Name Matching Review on the Data & Settings tab. Set to false to show everyone again.
   rosterOnly: true,
 };
+/* v2: when this file is opened from disk (file://), read this repo's data folder from GitHub instead */
+if(location.protocol==="file:"){ ["intercom","qualtrics","roster"].forEach(k=>{
+  CONFIG.sources[k].url="https://raw.githubusercontent.com/timramosthryv/supportkpidashboard/main/"+CONFIG.sources[k].url; }); }
 
 /* ---- carried over from the TSS Agent Time dashboard ---- */
 const START_DATE = "2026-08-01";
@@ -519,6 +654,11 @@ const STATUSES = [
   {key:"lunch",code:"lunch",base:"onbreak"},
   {key:"breakother",base:"onbreak",other:true},
 ];
+/* v2: readable labels for the agent detail panel */
+const STATUS_LABEL={available:"Available",handling:"Handling",apptsupport:"Appointment support",apptprep:"Appointment prep",
+  chatsupport:"Chat support",emailsupport:"Email support",projectwork:"Project work",followup:"Follow up",wrapup:"Wrap up",
+  relogin:"Agent relogin",addlwrapup:"Additional wrap-up",meeting:"In a meeting",coaching:"Coaching",training:"Training",
+  outofoffice:"Out of office",offlineother:"Offline, no code",awaydesk:"Away from desk",brk:"Break",lunch:"Lunch",breakother:"Break, no code"};
 const CODE_MAP={}; STATUSES.forEach(s=>{ if(s.code) CODE_MAP[s.code]=s.key; });
 const OFFLINE_CODE_KEYS=STATUSES.filter(s=>s.base==="offline"&&s.code).map(s=>s.key);
 const BREAK_CODE_KEYS=STATUSES.filter(s=>s.base==="onbreak"&&s.code).map(s=>s.key);
@@ -533,8 +673,8 @@ const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","De
 const S = {
   tss:[], qa:[], intercom:[], qualtrics:[], roster:[],
   status:{}, agents:new Map(), match:[], tab:"score",
-  settings:{method:"proportional", intercomMin:4, qualtricsMin:9, missing:"reweight"},
-  sort:{}, charts:{},
+  settings:{method:"proportional", intercomMin:4, qualtricsMin:9, missing:"require"},
+  sort:{}, charts:{}, tile:null, drawer:null,
 };
 const $ = s => document.querySelector(s);
 const esc = v => String(v==null?"":v).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -549,9 +689,17 @@ const quarterOf = d => d.slice(0,4)+"-Q"+Math.ceil((+d.slice(5,7))/3);
 const quarterLabel = q => "Q"+q.split("-Q")[1]+" "+q.slice(0,4);
 const quarterMonths = q => { const y=q.slice(0,4), n=+q.split("-Q")[1]; return [0,1,2].map(i=>y+"-"+String((n-1)*3+1+i).padStart(2,"0")); };
 const todayISO = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+/* v2 helpers */
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const shiftMonth = (m,k) => new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7)-1+k,1)).toISOString().slice(0,7);
+const lastWeekday = m => { const d=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)); while(d.getUTCDay()===0||d.getUTCDay()===6) d.setUTCDate(d.getUTCDate()-1); return d.toISOString().slice(0,10); };
+const weekKey = iso => { const d=new Date(iso+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7)); return d.toISOString().slice(0,10); };
+const countBy = (list,fn) => { const m=new Map(); list.forEach(o=>{const k=fn(o); m.set(k,(m.get(k)||0)+1);}); return [...m.entries()].sort((a,b)=>b[1]-a[1]); };
+const agentLink = r => `<span class="csm" data-k="${esc(r.key)}">${esc(r.name)}</span>`;
 
-function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem("kpiSettings")||"null"); if(s) Object.assign(S.settings,s); }catch(e){} }
-function saveSettings(){ try{ localStorage.setItem("kpiSettings",JSON.stringify(S.settings)); }catch(e){} }
+/* v2: new storage key, so the new "missing data" default applies instead of an older saved choice */
+function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem("kpiSettings2")||"null"); if(s) Object.assign(S.settings,s); }catch(e){} }
+function saveSettings(){ try{ localStorage.setItem("kpiSettings2",JSON.stringify(S.settings)); }catch(e){} }
 
 /* =====================================================================
    NAME HANDLING
@@ -587,21 +735,17 @@ function buildMatcher(){
     const full=t.filter(x=>x.length>1), inits=t.filter(x=>x.length===1);
     const pool=brandHint ? list.filter(a=>!a.brand||a.brand===brandHint) : list;
     const uniq=c=>c.length===1?c[0]:null;
-    // all full tokens present (e.g. "Jose M Figueroa" -> "Jose Figueroa Rijo")
     if(full.length>=2){
       let c=pool.filter(a=>full.every(x=>toks(a).includes(x)) && inits.every(i=>toks(a).some(y=>y.startsWith(i))));
       if(uniq(c)) return {agent:c[0],method:"partial name"};
-      // first name prefix + a shared last name ("Matt Gowan" -> "Matthew Gowan", "Cona Kight" -> "Nocona Kight")
       c=pool.filter(a=>{const at=toks(a); return at.slice(1).includes(full[full.length-1]) &&
         (at[0].startsWith(full[0])||full[0].startsWith(at[0])||at[0].endsWith(full[0]));});
       if(uniq(c)) return {agent:c[0],method:"partial name"};
     }
-    // first name + initial ("George C" -> "George Castro Cruz")
     if(full.length===1 && inits.length){
       const c=pool.filter(a=>{const at=toks(a); return at[0]===full[0] && inits.every(i=>at.slice(1).some(y=>y.startsWith(i)));});
       if(uniq(c)) return {agent:c[0],method:"first name + initial"};
     }
-    // first name only ("Gianni"), resolved later by elimination if ambiguous
     if(full.length===1 && !inits.length){
       const c=pool.filter(a=>toks(a)[0]===full[0]);
       if(uniq(c)) return {agent:c[0],method:"first name only"};
@@ -610,12 +754,9 @@ function buildMatcher(){
     return {agent:null,method:"unmatched"};
   };
 }
-/* Resolve a batch of distinct raw names; ambiguous first names are settled by removing candidates
-   already claimed by a stronger match from the same source. */
 function matchBatch(source, names, brandOf){
   const m=buildMatcher(), res=new Map();
   names.forEach(n=>res.set(n,m(n,brandOf?brandOf(n):"")));
-  // a first-name-only match may not take an agent that another spelling already matched more strongly
   const strong=new Map(); res.forEach((r,n)=>{ if(r.agent && !/^first name only/.test(r.method)) strong.set(r.agent.key,n); });
   res.forEach((r,n)=>{ if(r.agent && /^first name only/.test(r.method) && strong.has(r.agent.key)){
     r.method="not matched: first name only, and "+r.agent.name+" already matches \""+strong.get(r.agent.key)+"\""; r.agent=null; } });
@@ -667,7 +808,6 @@ function toISO(v){
   if(!/\b\d{4}\b/.test(s)) return "";
   const d=new Date(s); return isNaN(d)?"":d.toISOString().slice(0,10);
 }
-/* strict date reader for 8x8 exports (same rules as the TSS dashboard) */
 function tssDate(c){
   if(c instanceof Date && !isNaN(c)) return c.toISOString().slice(0,10);
   if(typeof c==="number") return new Date(Date.UTC(1899,11,30)+c*864e5).toISOString().slice(0,10);
@@ -769,7 +909,7 @@ async function loadTSS(){
    ===================================================================== */
 function channelFrom(t){ t=(t||"").toLowerCase();
   if(t.includes("educat")) return "Education"; if(t.includes("voice")||t.includes("call")) return "Voice";
-  if(t.includes("chat")) return "Chat"; if(t.includes("email")) return "Email"; return t?"Other":"Other"; }
+  if(t.includes("chat")) return "Chat"; if(t.includes("email")) return "Email"; return "Other"; }
 function qaFromRows(rows, brandForced){
   const hi=headerRow(rows,l=>l.some(c=>c.includes("agent name"))&&l.some(c=>c.includes("score")));
   if(hi<0) throw new Error("No 'Agent name' / score header found");
@@ -777,6 +917,7 @@ function qaFromRows(rows, brandForced){
   const cA=findCol(H,"agent","name"), cS=findCol(H,"overall","score")>=0?findCol(H,"overall","score"):findCol(H,"score");
   const cG=findCol(H,"main","group"), cT=findCol(H,"template"), cE=findCol(H,"evaluator");
   const cD=findCol(H,"evaluation","date")>=0?findCol(H,"evaluation","date"):findCol(H,"date");
+  const cX=findCol(H,"transaction","id"); // v2: kept for the repeated-evaluation check
   const out=[];
   for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue;
     const agent=titleName(row[cA]); const score=parseFloat(String(row[cS]).replace("%",""));
@@ -786,8 +927,10 @@ function qaFromRows(rows, brandForced){
     if(brandForced==="Keap" && g && g!=="Keap_Support") continue;
     const grp=cleanGroup(g);
     const coachQA = brand==="Keap" ? "" : (grp.split(" ").slice(1).join(" ")||grp);
-    out.push({agent,score:Math.round(score),brand,group:grp,coachQA,channel:channelFrom(cT>=0?row[cT]:""),
-      evaluator:cE>=0?String(row[cE]||""):"", date:toISO(row[cD])});
+    // v2: score kept unrounded; rounding happens only for display
+    out.push({agent,score,brand,group:grp,coachQA,channel:channelFrom(cT>=0?row[cT]:""),
+      evaluator:cE>=0?String(row[cE]||""):"", date:toISO(row[cD]), txn:cX>=0?String(row[cX]||"").trim():"",
+      template:cT>=0?String(row[cT]||""):""});
   }
   return out;
 }
@@ -801,10 +944,9 @@ async function loadQA(which){
 
 /* =====================================================================
    SOURCE: INTERCOM (conversation ratings export)
-   Expected columns (any order): Teammate rated · Conversation rating · a date column
-   (Rated at / Updated at / Created at) · optional Conversation ID, Team currently assigned
    ===================================================================== */
 const RATING_WORDS={terrible:1,bad:2,ok:3,okay:3,great:4,amazing:5,"😠":1,"🙁":2,"😐":3,"😃":4,"🤩":5};
+const RATING_NAME=["","Terrible","Bad","Ok","Great","Amazing"];
 function ratingVal(v){ const s=String(v||"").trim(); if(!s) return NaN;
   const n=parseFloat(s); if(!isNaN(n)&&n>=1&&n<=5) return Math.round(n);
   const l=s.toLowerCase(); for(const w in RATING_WORDS){ if(l.includes(w)) return RATING_WORDS[w]; } return NaN; }
@@ -812,9 +954,6 @@ function intercomFromRows(rows){
   const hi=headerRow(rows,l=>l.some(c=>c.includes("teammate"))&&l.some(c=>c.includes("rating")));
   if(hi<0) throw new Error("No 'Teammate rated' / 'Conversation rating' header found");
   const H=rows[hi].map(h=>String(h).trim());
-  // Works with two Intercom exports:
-  //   1) Report drill-in CSV:  Teammate rated · Conversation rating · Updated at
-  //   2) Dataset Export (Conversation dataset): Last teammate rated · Last teammate rating · Last conversation rating updated at
   const exact=re=>H.findIndex(h=>re.test(h.trim()));
   let cT=exact(/^last teammate rated$/i); if(cT<0) cT=exact(/^teammate rated$/i); if(cT<0) cT=findCol(H,"teammate","rated");
   let cR=exact(/^conversation rating$/i); if(cR<0) cR=exact(/^last teammate rating$/i);
@@ -835,8 +974,7 @@ function intercomFromRows(rows){
 }
 
 /* =====================================================================
-   SOURCE: QUALTRICS (survey export). Auto-detects agent, 0-10 score and date columns.
-   Set CONFIG.qualtricsColumns to force exact column names.
+   SOURCE: QUALTRICS (survey export)
    ===================================================================== */
 const qualtricsNote = q => "Scored on: "+q.cols[1]+" · Agent column: "+q.cols[0]+
   (q.assumedDate?" · No response date in this export, so all responses are counted on "+q.assumedDate:"");
@@ -854,10 +992,10 @@ function qualtricsFromRows(rows, fileDate){
   const fallback=fileDate||CONFIG.qualtricsNoDateAs||"";
   const out=[], seen=new Set();
   for(let r=hi+1;r<rows.length;r++){ const row=rows[r]; if(!row) continue;
-    if(cC>=0 && String(row[cC]).trim()!=="" && +row[cC]===0) continue;           // dashboard exports list every case; Count 1 = a response
-    const raw=String(row[cS]==null?"":row[cS]).trim(); if(raw==="") continue;    // no answer to the KPI question
+    if(cC>=0 && String(row[cC]).trim()!=="" && +row[cC]===0) continue;
+    const raw=String(row[cS]==null?"":row[cS]).trim(); if(raw==="") continue;
     const name=titleName(row[cA]); const s=parseFloat(raw);
-    if(!name||isNaN(s)||s<0||s>10) continue;                                     // also skips Qualtrics' 2nd/3rd header rows
+    if(!name||isNaN(s)||s<0||s>10) continue;
     const id=cE>=0?String(row[cE]||"").trim():""; if(id){ const k=id+"|"+name; if(seen.has(k)) continue; seen.add(k); }
     const d=cD>=0?toISO(row[cD]):"";
     out.push({name,score:s,date:d||fallback,dateAssumed:!d,id}); }
@@ -866,7 +1004,6 @@ function qualtricsFromRows(rows, fileDate){
 
 /* =====================================================================
    SOURCE: ROSTER  (Agent, Brand, Coach, Location, Training End, Aliases)
-   Aliases = other spellings separated by ; (e.g. "George C; George Castro")
    ===================================================================== */
 function rosterFromRows(rows){
   const hi=headerRow(rows,l=>l.some(c=>c==="agent"||c.includes("agent name")||c==="name")&&l.some(c=>c.includes("brand")||c.includes("coach")));
@@ -919,11 +1056,8 @@ const trainingDay = (a,d) => { if(!a) return false; if(a.trainingEnd) return d<=
 function coachFromGroup(g){ const p=String(g||"").split(" "); return p.length>1?p.slice(1).join(" "):g; }
 function buildModel(){
   S.agents=new Map(); S.match=[];
-  // 1. roster wins
   S.roster.forEach(r=>{ const a=upsertAgent(r.name,{source:"Roster",brand:r.brand,coach:r.coach,location:r.location,trainingEnd:r.trainingEnd,force:true}); r.aliases.forEach(x=>a.aliases.add(x)); });
-  // 2. TSS (full names from 8x8)
   const tssLatest=new Map(); S.tss.slice().sort((x,y)=>x.date<y.date?-1:1).forEach(r=>tssLatest.set(norm(r.agent),r));
-  // Roster-only mode: once a roster is loaded, it is the official list. Anyone in the data who is not on it is left out.
   const RO = CONFIG.rosterOnly && S.roster.length>0;
   const m0=buildMatcher(), tssKey=new Map();
   tssLatest.forEach((r,k)=>{
@@ -937,7 +1071,6 @@ function buildModel(){
     if(hit.agent && hit.method!=="exact") S.match.push({src:"TSS",raw:r.agent,to:hit.agent.name,method:hit.method,n:1});
   });
   S.tss.forEach(r=>r.akey=tssKey.has(norm(r.agent))?tssKey.get(norm(r.agent)):norm(r.agent));
-  // 3. QA names: match to TSS/roster, otherwise create
   { const names=[...new Set(S.qa.map(r=>r.agent))]; const brandOf=n=>{const r=S.qa.find(x=>x.agent===n);return r?r.brand:"";};
     const res=matchBatch("QA",names,brandOf);
     names.forEach(n=>{ const h=res.get(n); const rec=S.qa.find(x=>x.agent===n);
@@ -951,7 +1084,6 @@ function buildModel(){
       if(!a.coach) a.coach = rec.brand==="Keap" ? keapCoach(n) : rec.coachQA;
       S.qa.filter(x=>x.agent===n).forEach(x=>x.akey=a.key);
     }); }
-  // 4. Intercom + Qualtrics (short display names)
   [["Intercom",S.intercom],["Qualtrics",S.qualtrics]].forEach(([src,arr])=>{
     const names=[...new Set(arr.map(r=>r.name))];
     const brandOf=n=>{const r=arr.find(x=>x.name===n); return r&&r.brandHint||"";};
@@ -970,7 +1102,6 @@ function buildModel(){
 /* =====================================================================
    FILTERS
    ===================================================================== */
-/* Every filter is a multi-select. An empty set means "All". */
 const F={quarter:new Set(),month:new Set(),day:new Set(),brand:new Set(),loc:new Set(),coach:new Set(),agent:new Set()};
 const MS={};
 const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -1045,7 +1176,7 @@ function period(){
   const days=F.day.size?new Set([...F.day].filter(d=>mset.has(monthOf(d)))):null;
   if(days) months=months.filter(m=>[...days].some(d=>monthOf(d)===m));
   const has=d=>!!d && mset.has(monthOf(d)) && (!days||days.has(d));
-  const hasNoDay=d=>!!d && mset.has(monthOf(d));            // ignores the Day filter (used to show the full trend with selected days highlighted)
+  const hasNoDay=d=>!!d && mset.has(monthOf(d));
   const elapsed=months.filter(m=>m<=monthOf(todayISO())).length;
   let label;
   if(days){ const ds=[...days].sort(); label=ds.length<=3?ds.map(dayLabel).join(", "):(ds.length+" days selected"); }
@@ -1057,15 +1188,27 @@ function period(){
   const end=days?[...days].sort().pop():(months.length?lastDay(months[months.length-1]):"0000-00-00");
   return {qs,months,days,has,hasNoDay,elapsed,label,slug,start,end};
 }
+/* v2: the period of equal length just before the selection (none when individual days are picked) */
+function prevPeriod(P){
+  if(P.days||!P.months.length) return null;
+  const n=P.months.length, months=P.months.map(m=>shiftMonth(m,-n)), mset=new Set(months);
+  const has=d=>!!d && mset.has(monthOf(d));
+  const q=quarterOf(months[0]+"-01"), isQ=n===3&&quarterMonths(q).join()===months.join();
+  const lastDay=m=>m+"-"+String(new Date(+m.slice(0,4),+m.slice(5,7),0).getDate()).padStart(2,"0");
+  return {qs:[],months,days:null,has,hasNoDay:has,elapsed:n,label:isQ?quarterLabel(q):months.map(monthLabel).join(", "),
+    slug:"",start:months[0]+"-01",end:lastDay(months[n-1])};
+}
 function agentPass(a){
   return a && (!F.brand.size||F.brand.has(a.brand)) && (!F.loc.size||F.loc.has(a.location)) && (!F.coach.size||F.coach.has(a.coach)) && (!F.agent.size||F.agent.has(a.key));
 }
+/* v2: latest date covered by the CSAT files, used for pacing */
+function csatAsOf(){ return [...S.intercom.map(x=>x.date),...S.qualtrics.map(x=>x.date)].filter(Boolean).sort().pop()||""; }
 
 /* =====================================================================
    COMPUTE
    ===================================================================== */
-function compute(){
-  const P=period(), T=CONFIG.targets, st=S.settings;
+function compute(Pin){
+  const P=Pin||period(), T=CONFIG.targets, st=S.settings;
   const rows=new Map();
   const get=key=>{ let r=rows.get(key); if(!r){ const a=S.agents.get(key); r={a,key,name:a.name,brand:a.brand,coach:a.coach,location:a.location,
     login:0,prod:0,days:0,qa:[],ic:[],ql:[],trainee:false}; rows.set(key,r);} return r; };
@@ -1073,69 +1216,87 @@ function compute(){
   S.qa.forEach(x=>{ if(!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).qa.push(x); });
   S.intercom.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).ic.push(x); });
   S.qualtrics.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).ql.push(x); });
-  // roster agents with no activity still appear on the scorecard
   S.roster.forEach(rr=>{ const a=S.agents.get(norm(rr.name)); if(agentPass(a)) get(a.key); });
-  // 1 qualifying survey per month in the selection (a full quarter = 3)
   const csatTarget = Math.max(1, P.months.length) * T.csatPerMonth;
-  const csatExpected = Math.min(csatTarget, P.elapsed*T.csatPerMonth);
+  /* v2: expected so far = completed months in the selection, judged against the latest CSAT data date.
+     A month counts once the CSAT files cover its last weekday. */
+  const asOf=csatAsOf();
+  const completed=asOf?P.months.filter(m=>lastWeekday(m)<=asOf).length:0;
+  const csatExpected = Math.min(csatTarget, completed*T.csatPerMonth);
+  const hasCsatSource = S.intercom.length+S.qualtrics.length>0;
+  const minQA = T.minQaEvals||1;
   const out=[...rows.values()].map(r=>{
     r.trainee=isTrainee(r.a,P.start,P.end);
     r.prodPct = r.login>0 ? r.prod/r.login*100 : NaN;
     r.qaAvg = r.qa.length ? avg(r.qa.map(x=>x.score)) : NaN;
     r.qaGoal = r.brand==="Keap"?T.qaKeap:T.qaThryv;
+    r.lowQA = r.qa.length>0 && r.qa.length<minQA;
     r.icQual = r.ic.filter(x=>x.rating>=st.intercomMin).length;
     r.qlQual = r.ql.filter(x=>x.score>=st.qualtricsMin).length;
     r.csatQual = r.icQual + r.qlQual;
     r.csatTotal = r.ic.length + r.ql.length;
     r.csatTarget=csatTarget; r.csatExpected=csatExpected;
-    r.csatPace = r.csatQual>=csatTarget ? "Met" : (r.csatQual>=csatExpected ? "On pace" : "Behind");
-    const hasCsatSource = S.intercom.length+S.qualtrics.length>0;
+    r.csatPace = r.csatQual>=csatTarget ? "Met" : (csatExpected===0 ? "Not due yet" : (r.csatQual>=csatExpected ? "On pace" : "Behind"));
+    /* v2: under the recommended setting an agent needs Productivity data and enough QA evaluations to be scored */
+    const prodHas=isFinite(r.prodPct), qaHas=st.missing==="require" ? r.qa.length>=minQA : r.qa.length>0;
+    r.missing=[]; if(!prodHas) r.missing.push("prod"); if(!qaHas) r.missing.push("qa");
+    r.notEnough = st.missing==="require" && r.missing.length>0;
     const pil=[
-      {k:"prod", has:isFinite(r.prodPct), ratio:r.prodPct/T.productive},
-      {k:"qa",   has:isFinite(r.qaAvg),   ratio:r.qaAvg/r.qaGoal},
-      {k:"csat", has:hasCsatSource,       ratio:r.csatQual/csatTarget},
+      {k:"prod", has:prodHas, ratio:r.prodPct/T.productive},
+      {k:"qa",   has:qaHas,   ratio:r.qaAvg/r.qaGoal},
+      {k:"csat", has:hasCsatSource, ratio:r.csatQual/csatTarget},
     ];
-    let wsum=0, total=0, raw={}; r.pts={}; r.met=0; r.missing=[];
+    let wsum=0, total=0, raw={}; r.pts={}; r.met=0; r.over=0;
     pil.forEach(p=>{
       const w=CONFIG.weights[p.k];
-      // no CSAT file loaded at all: leave CSAT out for everyone rather than scoring it 0
       if(p.k==="csat" && !hasCsatSource){ r.pts[p.k]=null; return; }
-      if(!p.has){ r.missing.push(p.k); raw[p.k]=null; if(st.missing==="zero"){ wsum+=w; raw[p.k]=0; } return; }
+      if(!p.has){ raw[p.k]=null; if(st.missing==="zero"){ wsum+=w; raw[p.k]=0; } return; }
       const met=p.ratio>=1; if(met) r.met++;
+      r.over+=isFinite(p.ratio)?p.ratio:0;
       const e = st.method==="passfail" ? (met?1:0) : Math.max(0,Math.min(1,p.ratio));
       raw[p.k]=e*w; total+=e*w; wsum+=w;
     });
-    // points shown per pillar are scaled so they add up to the KPI score (out of 100)
     Object.keys(raw).forEach(k=>r.pts[k]= raw[k]==null ? null : raw[k]/wsum*100);
     r.pillarsAvail = hasCsatSource ? 3 : 2;
-    r.total = wsum>0 ? total/wsum*100 : NaN;
+    r.total = (wsum>0 && !r.notEnough) ? total/wsum*100 : NaN;
+    if(r.notEnough){ r.pts={prod:null,qa:null,csat:null}; }
+    r.scored=isFinite(r.total);
+    r.totalSort=r.scored?r.total:-1; r.metSort=r.scored?r.met:-1;
     return r;
   });
-  return {P, rows:out};
+  return {P, rows:out, csatAsOf:asOf, csatCompleted:completed, NP:hasCsatSource?3:2};
 }
 
 /* =====================================================================
    RENDER HELPERS
    ===================================================================== */
-const colorFor=(v,goal)=> !isFinite(v)?"#c7ced6":(v>=goal?"#1f9d55":(v>=goal-5?"#f0a020":"#d64545"));
+const colorFor=(v,goal)=> !isFinite(v)?css("--track"):(v>=goal?css("--green"):(v>=goal-5?css("--amber"):css("--red")));
 const badge=(v,goal,txt)=>{ const c=!isFinite(v)?"b-grey":(v>=goal?"b-green":(v>=goal-5?"b-amber":"b-red")); return `<span class="badge ${c}">${txt}</span>`; };
-const scoreColor=v=> !isFinite(v)?"#c7ced6":(v>=99.95?"#1f9d55":(v>=90?"#f0a020":"#d64545"));
-const paceBadge=(r,txt)=>`<span class="badge ${r.csatPace==="Met"?"b-green":r.csatPace==="On pace"?"b-amber":"b-red"}">${txt}</span>`;
-const brandName=b=>b==="Thryv"?"TSS":b;   // internal value stays "Thryv"; shown as TSS
+const scoreColor=v=> !isFinite(v)?css("--muted"):(v>=99.95?css("--green"):(v>=90?css("--amber-ink"):css("--red")));
+const paceClass=p=>p==="Met"?"b-green":p==="On pace"?"b-amber":p==="Not due yet"?"b-grey":"b-red";
+const paceBadge=(r,txt)=>`<span class="badge ${paceClass(r.csatPace)}">${txt}</span>`;
+const brandName=b=>b==="Thryv"?"TSS":b;
 const brandTag=b=>`<span class="tag ${b==="Keap"?"keap":"thryv"}">${esc(brandName(b))}</span>`;
 const groupTxt=r=>r.a&&r.a.group?`<span class="pts">${esc(r.a.group)}</span>`:"";
 const trainTag='<span class="tag">In Training</span>';
+const lowTag='<span class="tag low" title="Fewer evaluations than the minimum, so QA does not count toward a KPI score yet">Low sample</span>';
 function kill(id){ if(S.charts[id]){ S.charts[id].destroy(); delete S.charts[id]; } }
-function goalLine(val,orient,label){ return {id:"g"+Math.random(),afterDraw(c){const{ctx,chartArea:a,scales}=c; ctx.save(); ctx.strokeStyle="#1d2733"; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
-  if(orient==="x"){const x=scales.x.getPixelForValue(val); ctx.beginPath(); ctx.moveTo(x,a.top); ctx.lineTo(x,a.bottom); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle="#1d2733"; ctx.font="700 11px Inter,sans-serif"; ctx.fillText(label,x+4,a.top+11);}
-  else{const y=scales.y.getPixelForValue(val); ctx.beginPath(); ctx.moveTo(a.left,y); ctx.lineTo(a.right,y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle="#1d2733"; ctx.font="700 11px Inter,sans-serif"; ctx.fillText(label,a.right-70,y-5);}
+/* v2: reference line drawn on a solid chip so the label stays readable over bars, in either theme */
+function goalLine(val,orient,label){ return {id:"g"+Math.random(),afterDatasetsDraw(c){
+  if(val==null||!isFinite(val)) return;
+  const{ctx,chartArea:a,scales}=c, ink=css("--ink"); ctx.save(); ctx.strokeStyle=ink; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+  ctx.font="700 11px Inter,sans-serif";
+  const chip=(x,y,alignRight)=>{ if(!label) return; const w=ctx.measureText(label).width+10, x0=alignRight?x-w:x;
+    ctx.setLineDash([]); ctx.fillStyle=css("--card"); ctx.fillRect(x0,y-13,w,17); ctx.strokeStyle=ink; ctx.lineWidth=1; ctx.strokeRect(x0,y-13,w,17);
+    ctx.fillStyle=ink; ctx.fillText(label,x0+5,y); };
+  if(orient==="x"){const x=scales.x.getPixelForValue(val); ctx.beginPath(); ctx.moveTo(x,a.top); ctx.lineTo(x,a.bottom); ctx.stroke(); chip(x+5,a.bottom-6,false);}
+  else{const y=scales.y.getPixelForValue(val); ctx.beginPath(); ctx.moveTo(a.left,y); ctx.lineTo(a.right,y); ctx.stroke(); chip(a.right-2,y-5,true);}
   ctx.restore();}}; }
-/* Writes each bar's value at the end of the bar (inside the bar in white when there is no room outside). */
 function valueLabels(fmt){ return {id:"vl"+Math.random(),afterDatasetsDraw(c){
   const {ctx,chartArea:a}=c; ctx.save(); ctx.font="700 10.5px Inter,-apple-system,sans-serif"; ctx.textBaseline="middle";
   c.data.datasets.forEach((ds,di)=>{ const meta=c.getDatasetMeta(di); if(meta.hidden) return;
     meta.data.forEach((bar,i)=>{ const v=ds.data[i]; if(v==null||!isFinite(v)) return; const t=fmt(v), w=ctx.measureText(t).width;
-      if(bar.x+6+w<=a.right){ ctx.fillStyle="rgba(255,255,255,.9)"; ctx.fillRect(bar.x+3,bar.y-7,w+4,14); ctx.fillStyle="#1d2733"; ctx.fillText(t,bar.x+5,bar.y); }
+      if(bar.x+6+w<=a.right){ ctx.fillStyle=css("--card"); ctx.fillRect(bar.x+3,bar.y-7,w+4,14); ctx.fillStyle=css("--ink"); ctx.fillText(t,bar.x+5,bar.y); }
       else { ctx.fillStyle="#ffffff"; ctx.fillText(t,bar.x-w-6,bar.y); } }); });
   ctx.restore(); }}; }
 function hbar(id, boxId, labels, datasets, opts){
@@ -1144,8 +1305,9 @@ function hbar(id, boxId, labels, datasets, opts){
   const plugins=[]; if(opts.goal!=null) plugins.push(goalLine(opts.goal,"x",opts.goalLabel)); if(opts.valueFmt) plugins.push(valueLabels(opts.valueFmt));
   S.charts[id]=new Chart($("#"+id),{type:"bar",data:{labels,datasets},
     options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,layout:{padding:{right:opts.valueFmt?8:0}},
+      onClick:opts.onClick, onHover:opts.onClick?((e,els)=>{e.native.target.style.cursor=els.length?"pointer":"default";}):undefined,
       plugins:{legend:{display:!!opts.legend,position:"top",labels:{boxWidth:12,font:{size:11}}},tooltip:{callbacks:opts.tip||{}}},
-      scales:{x:{stacked:!!opts.stacked,min:opts.min??0,max:opts.max,ticks:{callback:opts.xfmt||(v=>v)},grid:{color:"#eef1f4"}},
+      scales:{x:{stacked:!!opts.stacked,min:opts.min??0,max:opts.max,ticks:{callback:opts.xfmt||(v=>v)},grid:{color:css("--line")}},
               y:{stacked:!!opts.stacked,ticks:{font:{size:10.5},autoSkip:false},grid:{display:false}}}},
     plugins});
 }
@@ -1165,72 +1327,154 @@ function sortRows(tbl, rows, defKey, defDir){
 }
 function bindSort(tbl){ document.querySelectorAll("#"+tbl+" th[data-k]").forEach(th=>th.onclick=()=>{ const k=th.dataset.k; const s=S.sort[tbl]||{};
   S.sort[tbl]={k,d:s.k===k?-s.d:(th.classList.contains("num")?-1:1)}; renderAll(); }); }
+/* v2: sparkline and change helpers */
+function sparkSVG(vals,color,title){
+  const v=vals.filter(x=>x!=null&&isFinite(x)); if(v.length<2) return "";
+  const mn=Math.min(...v),mx=Math.max(...v),rg=mx-mn||1;
+  const pts=v.map((x,i)=>`${(i/(v.length-1)*100).toFixed(2)},${(26-(x-mn)/rg*24).toFixed(2)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 100 28" preserveAspectRatio="none"><title>${esc(title||"Weekly trend")}</title>`+
+    `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+}
+function deltaHTML(cur,prev,label,unit){
+  if(!isFinite(cur)||!isFinite(prev)) return "";
+  const d=cur-prev, flat=Math.abs(d)<0.05;
+  return `<div class="delta ${flat?"flat":(d>0?"up":"down")}" title="Compared with ${esc(label)}">${flat?"■":(d>0?"▲":"▼")} ${Math.abs(d).toFixed(1)}${unit} vs ${esc(label)}</div>`;
+}
+/* QA has two brand values, so its change line shows both */
+function qaDelta(cur,prev,label){
+  const part=(name,c,p)=>{ if(!isFinite(c)||!isFinite(p)) return ""; const d=c-p, flat=Math.abs(d)<0.05;
+    return `<span class="delta ${flat?"flat":(d>0?"up":"down")}" style="display:inline">${name} ${flat?"■":(d>0?"▲":"▼")} ${Math.abs(d).toFixed(1)} pts</span>`; };
+  const a=part("TSS",cur.qaT,prev.qaT), b=part("Keap",cur.qaK,prev.qaK);
+  if(!a&&!b) return "";
+  return `<div class="delta flat" title="Compared with ${esc(label)}">${[a,b].filter(Boolean).join(" · ")} vs ${esc(label)}</div>`;
+}
+/* weekly series inside the selection, for sparklines */
+function weeklySeries(C){
+  const P=C.P, keys=new Map(C.rows.filter(r=>!r.trainee).map(r=>[r.key,r]));
+  const wk=new Map(); const g=k=>{ if(!wk.has(k)) wk.set(k,{l:0,p:0,qa:[],cs:0}); return wk.get(k); };
+  S.tss.forEach(x=>{ if(!P.has(x.date)||!keys.has(x.akey)) return; const o=g(weekKey(x.date)); o.l+=x.loggedin; o.p+=x.prod; });
+  S.qa.forEach(x=>{ if(!P.has(x.date)||!keys.has(x.akey)) return; g(weekKey(x.date)).qa.push(x.score); });
+  S.intercom.forEach(x=>{ if(!x.akey||!P.has(x.date)||!keys.has(x.akey)||x.rating<S.settings.intercomMin) return; g(weekKey(x.date)).cs++; });
+  const ks=[...wk.keys()].sort();
+  return {prod:ks.map(k=>wk.get(k).l?wk.get(k).p/wk.get(k).l*100:null), qa:ks.map(k=>wk.get(k).qa.length?avg(wk.get(k).qa):null), csat:ks.map(k=>wk.get(k).cs)};
+}
+function teamStats(C){
+  const roll=C.rows.filter(r=>!r.trainee), scored=roll.filter(r=>r.scored);
+  const login=roll.reduce((a,r)=>a+r.login,0), prod=roll.reduce((a,r)=>a+r.prod,0);
+  const ev=roll.flatMap(r=>r.qa);
+  return {score:avg(scored.map(r=>r.total)), prodPct:login?prod/login*100:NaN,
+    qaT:avg(ev.filter(x=>x.brand==="Thryv").map(x=>x.score)), qaK:avg(ev.filter(x=>x.brand==="Keap").map(x=>x.score))};
+}
+
+/* =====================================================================
+   v2: STATUS TILES (Scorecard)
+   ===================================================================== */
+const TILES=[
+  {k:"all", l:"All Met",       d:"meeting every pillar",        c:"--green", f:(r,NP)=>!r.trainee&&r.scored&&r.met===NP},
+  {k:"one", l:"One Short",     d:"missing one pillar",          c:"--amber", f:(r,NP)=>!r.trainee&&r.scored&&r.met===NP-1},
+  {k:"two", l:"Two+ Short",    d:"needs attention",             c:"--red",   f:(r,NP)=>!r.trainee&&r.scored&&r.met<=NP-2},
+  {k:"csat",l:"CSAT Behind",   d:"under monthly pacing",        c:"--orange",f:(r,NP)=>!r.trainee&&NP===3&&r.csatPace==="Behind"},
+  {k:"nodata",l:"Not Enough Data",d:"not scored yet",           c:"--muted", f:(r)=>!r.trainee&&!r.scored},
+  {k:"train",l:"In Training",  d:"shown, not in rollups",       c:"--blue",  f:(r)=>r.trainee},
+];
 
 /* =====================================================================
    RENDER: SCORECARD
    ===================================================================== */
 function renderScore(C){
-  const T=CONFIG.targets, rows=C.rows, roll=rows.filter(r=>!r.trainee);
-  const scored=roll.filter(r=>isFinite(r.total));
+  const T=CONFIG.targets, rows=C.rows, roll=rows.filter(r=>!r.trainee), NP=C.NP;
+  const scored=roll.filter(r=>r.scored);
   const team=avg(scored.map(r=>r.total));
-  setHero("#sHero", team, 100, v=>isFinite(v)?r1(v).toFixed(1):"-", 100);
-  $("#sHeroDesc").textContent=`${C.P.label} · average of ${scored.length} agents · ${S.settings.method==="passfail"?"pass/fail":"proportional"} scoring`;
-  const NP=S.intercom.length+S.qualtrics.length>0?3:2;
-  const all3=roll.filter(r=>r.met===NP).length;
-  $("#sHeroPill").className="pill "+(all3===roll.length&&roll.length?"over":"close");
-  $("#sHeroPill").textContent=`${all3} of ${roll.length} meeting all ${NP}`;
+  // v2: hero with optional goal, change vs prior period and a sparkline
+  const goal=T.teamScoreGoal;
+  $("#sHeroVal").textContent=isFinite(team)?r1(team).toFixed(1):"-";
+  const bar=$("#sHeroBar"); bar.style.width=(isFinite(team)?Math.min(100,team):0)+"%";
+  bar.style.background=goal==null?"var(--blue)":(team>=goal?"var(--green)":(team>=goal-5?"var(--amber)":"var(--orange)"));
+  $("#sHeroGoal").innerHTML=goal==null?"":`<div class="goal-mark" style="left:${goal}%"><div class="goal-line"></div><div class="goal-txt">Goal ${goal}</div></div>`;
+  $("#sHeroDesc").textContent=`${C.P.label} · average of ${scored.length} scored agents · ${S.settings.method==="passfail"?"pass/fail":"proportional"} scoring`;
   if(NP===2) $("#sHeroDesc").textContent+=" · CSAT not scored until an Intercom or Qualtrics file is loaded";
+  const all3=roll.filter(r=>r.scored&&r.met===NP).length;
+  $("#sHeroPill").className="pill "+(goal==null?"neutral":(all3===scored.length&&scored.length?"over":"close"));
+  $("#sHeroPill").textContent=`${all3} of ${scored.length} meeting all ${NP}`;
+  const PP=prevPeriod(C.P), PC=PP?compute(PP):null, prevT=PC?teamStats(PC):null, curT=teamStats(C);
+  /* the team score change only shows when the prior period scored a comparable group of agents
+     (at least 80% as many). Otherwise the two averages describe different people. */
+  const prevScored=PC?PC.rows.filter(r=>!r.trainee&&r.scored).length:0;
+  const comparable=PC&&prevScored>=0.8*scored.length;
+  $("#sHeroDelta").innerHTML=prevT&&comparable?deltaHTML(team,prevT.score,PP.label," pts")
+    :(PC?`<div class="delta flat" title="${prevScored} agents could be scored in ${esc(PP.label)} vs ${scored.length} now">No comparable prior period</div>`:"");
+  const W=weeklySeries(C);
   // pillars
-  const login=roll.reduce((a,r)=>a+r.login,0), prod=roll.reduce((a,r)=>a+r.prod,0), prodPct=login?prod/login*100:NaN;
-  const qaT=roll.flatMap(r=>r.qa.filter(x=>x.brand==="Thryv").map(x=>x.score)), qaK=roll.flatMap(r=>r.qa.filter(x=>x.brand==="Keap").map(x=>x.score));
-  const metProd=roll.filter(r=>r.prodPct>=T.productive).length, metQA=roll.filter(r=>r.qaAvg>=r.qaGoal).length, metCS=roll.filter(r=>r.csatQual>=r.csatTarget).length;
-  const onPace=roll.filter(r=>r.csatPace!=="Behind").length;
-  const hasCsat=S.intercom.length+S.qualtrics.length>0;
+  const qaAgents=roll.filter(r=>r.qa.length>=(T.minQaEvals||1));
+  const metProd=roll.filter(r=>r.prodPct>=T.productive).length, metQA=qaAgents.filter(r=>r.qaAvg>=r.qaGoal).length, metCS=roll.filter(r=>r.csatQual>=r.csatTarget).length;
+  const onPace=roll.filter(r=>r.csatPace==="On pace"||r.csatPace==="Met").length;
+  const asOfTxt=C.csatAsOf?`CSAT data through ${C.csatAsOf}`:"No CSAT file loaded yet";
   const P=[
-    {t:"Productivity",c:"#2e9e5b",v:fmtPct(prodPct),d:`Target ${T.productive}% · ${metProd} of ${roll.filter(r=>isFinite(r.prodPct)).length} agents at target`,fill:prodPct/T.productive},
-    {t:"QA",c:"#3d7bd6",v:`${fmtPct(avg(qaT))} <span class="small">TSS</span> · ${fmtPct(avg(qaK))} <span class="small">Keap</span>`,d:`Goals: TSS ${T.qaThryv}% · Keap ${T.qaKeap}% · ${metQA} of ${roll.filter(r=>isFinite(r.qaAvg)).length} agents at goal`,fill:(roll.filter(r=>isFinite(r.qaAvg)).length?metQA/roll.filter(r=>isFinite(r.qaAvg)).length:0)},
-    {t:"CSAT",c:"#ff5000",v:hasCsat?`${metCS} <span class="small">at goal</span> · ${onPace} <span class="small">on pace</span>`:"No CSAT data yet",d:`${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys (Intercom + Qualtrics) · pacing 1 per month`,fill:roll.length?metCS/roll.length:0},
+    {t:"Productivity",c:"--prod",v:fmtPct(curT.prodPct),
+      d:`Target ${T.productive}% · ${metProd} of ${roll.filter(r=>isFinite(r.prodPct)).length} agents at target`,fill:curT.prodPct/T.productive,
+      delta:prevT?deltaHTML(curT.prodPct,prevT.prodPct,PP.label," pts"):"",spark:sparkSVG(W.prod,css("--prod"),"Weekly productive %")},
+    {t:"QA",c:"--qa",v:`${fmtPct(curT.qaT)} <span class="small">TSS</span> · ${fmtPct(curT.qaK)} <span class="small">Keap</span>`,
+      d:`Goals: TSS ${T.qaThryv}% · Keap ${T.qaKeap}% · ${metQA} of ${qaAgents.length} agents at goal (${T.minQaEvals}+ evaluations) · averaged across evaluations`,
+      fill:qaAgents.length?metQA/qaAgents.length:0,
+      delta:prevT?qaDelta(curT,prevT,PP.label):"",
+      spark:sparkSVG(W.qa,css("--qa"),"Weekly QA average")},
+    {t:"CSAT",c:"--csat",v:NP===3?`${metCS} <span class="small">at goal</span> · ${onPace} <span class="small">on pace</span>`:"Waiting on upload",
+      d:`${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys (Intercom + Qualtrics) · ${rows[0]?rows[0].csatExpected:0} expected so far · ${asOfTxt}`,
+      fill:roll.length?metCS/roll.length:0,delta:"",spark:sparkSVG(W.csat,css("--csat"),"Weekly qualifying Intercom ratings")},
   ];
-  $("#pillars").innerHTML=P.map(p=>`<div class="pillar" style="border-top-color:${p.c}"><span class="pw">33.3%</span><div class="klabel">${p.t}</div>
-    <div class="pv">${p.v}</div><div class="pd">${p.d}</div><div class="mini"><div style="width:${Math.min(100,(p.fill||0)*100)}%;background:${p.c}"></div></div></div>`).join("");
-  statCards("#sStats",[
-    {l:"Agents",v:rows.length,d:`${rows.length-roll.length} in training`,c:"#1d2733"},
-    {l:"All Met",v:all3,d:"meeting every pillar",c:"#1f9d55"},
-    {l:"One Short",v:roll.filter(r=>r.met===NP-1).length,d:"missing one pillar",c:"#f0a020"},
-    {l:"Two+ Short",v:roll.filter(r=>r.met<=NP-2).length,d:"needs attention",c:"#d64545"},
-    {l:"CSAT Behind",v:NP===3?roll.filter(r=>r.csatPace==="Behind").length:"-",d:NP===3?"under monthly pacing":"no CSAT file yet",c:"#ff5000"},
-    {l:"Missing Data",v:roll.filter(r=>r.missing.length).length,d:"agents with a blank pillar",c:"#6b7683"},
-  ]);
-  // chart: stacked points by agent
-  const ranked=rows.filter(r=>isFinite(r.total)).sort((a,b)=>a.total-b.total);
+  $("#pillars").innerHTML=P.map(p=>`<div class="pillar" style="border-top-color:var(${p.c})"><span class="pw">33.3%</span><div class="klabel">${p.t}</div>
+    <div class="pv">${p.v}</div>${p.delta||""}<div class="pd">${p.d}</div><div class="mini"><div style="width:${Math.min(100,(p.fill||0)*100)}%;background:var(${p.c})"></div></div>${p.spark}</div>`).join("");
+  // v2: status tiles
+  $("#sStats").innerHTML=TILES.map(t=>{ const n=(t.k==="csat"&&NP!==3)?"-":rows.filter(r=>t.f(r,NP)).length;
+    return `<div class="stat tile${S.tile===t.k?" on":""}" data-t="${t.k}" role="button" tabindex="0" style="border-top-color:var(${t.c})"><div class="top"><span class="slabel">${t.l}</span><span class="dot" style="background:var(${t.c})"></span></div><div class="sval">${n}</div><div class="sdesc">${t.d}</div></div>`; }).join("");
+  $("#sStats").querySelectorAll(".tile").forEach(el=>{ const go=()=>{ S.tile=S.tile===el.dataset.t?null:el.dataset.t; renderAll(); };
+    el.onclick=go; el.onkeydown=e=>{ if(e.key==="Enter") go(); }; });
+  const act=TILES.find(t=>t.k===S.tile);
+  $("#tileHint").innerHTML=act?`Agent Scorecard is showing <b>${esc(act.l)}</b> only. <span class="linkish" id="tileClear">Show all</span>`:"Click a tile to filter the Agent Scorecard below.";
+  if(act) $("#tileClear").onclick=()=>{ S.tile=null; renderAll(); };
+  // v2: ranking chart, highest first, with team average line; click a bar for detail
+  const ranked=rows.filter(r=>r.scored).sort((a,b)=>b.total-a.total||b.over-a.over);
   const pt=(r,k)=>r.pts[k]==null?0:r1(r.pts[k]);
   hbar("scoreChart","scoreChartBox",ranked.map(r=>r.name+(r.trainee?" (training)":"")),[
-    {label:"Productivity",data:ranked.map(r=>pt(r,"prod")),backgroundColor:"#2e9e5b",barThickness:12},
-    {label:"QA",data:ranked.map(r=>pt(r,"qa")),backgroundColor:"#3d7bd6",barThickness:12},
-    {label:"CSAT",data:ranked.map(r=>pt(r,"csat")),backgroundColor:"#ff5000",barThickness:12},
-  ],{stacked:true,max:100,legend:true,rowH:18,goal:100,goalLabel:"",tip:{footer:items=>"KPI score: "+r1(ranked[items[0].dataIndex].total)}});
-  // coach
+    {label:"Productivity",data:ranked.map(r=>pt(r,"prod")),backgroundColor:css("--prod"),barThickness:12},
+    {label:"QA",data:ranked.map(r=>pt(r,"qa")),backgroundColor:css("--qa"),barThickness:12},
+    {label:"CSAT",data:ranked.map(r=>pt(r,"csat")),backgroundColor:css("--csat"),barThickness:12},
+  ],{stacked:true,max:100,legend:true,rowH:18,goal:isFinite(team)?r1(team):null,goalLabel:"Team avg "+(isFinite(team)?r1(team).toFixed(1):""),
+    onClick:(e,els)=>{ if(els.length) openDrawer(ranked[els[0].index].key); },
+    tip:{footer:items=>"KPI score: "+r1(ranked[items[0].dataIndex].total)}});
+  // coach: neutral colors with team average line
   const byC={}; scored.forEach(r=>(byC[r.coach]=byC[r.coach]||[]).push(r.total));
-  const cl=Object.keys(byC).sort((a,b)=>avg(byC[a])-avg(byC[b])); const cv=cl.map(c=>r1(avg(byC[c])));
-  hbar("coachScoreChart","coachScoreBox",cl,[{data:cv,backgroundColor:cv.map(scoreColor),borderRadius:4,barThickness:16}],{max:100,rowH:26,tip:{label:c=>c.raw+" ("+byC[cl[c.dataIndex]].length+" agents)"}});
+  const cl=Object.keys(byC).sort((a,b)=>avg(byC[b])-avg(byC[a])); const cv=cl.map(c=>r1(avg(byC[c])));
+  hbar("coachScoreChart","coachScoreBox",cl,[{data:cv,backgroundColor:cv.map(v=>v>=team?css("--blue"):css("--muted")),borderRadius:4,barThickness:16}],
+    {max:100,rowH:26,goal:isFinite(team)?r1(team):null,goalLabel:"Team avg",valueFmt:v=>v.toFixed(1),tip:{label:c=>c.raw+" ("+byC[cl[c.dataIndex]].length+" agents)"}});
   kill("metChart");
   const metN=NP===3?[3,2,1,0]:[2,1,0];
   S.charts.metChart=new Chart($("#metChart"),{type:"bar",data:{labels:metN.map(n=>n+" of "+NP),
-    datasets:[{data:metN.map(n=>roll.filter(r=>r.met===n).length),backgroundColor:["#1f9d55","#f0a020","#e8843b","#d64545"],borderRadius:5,barThickness:34}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
+    datasets:[{data:metN.map(n=>scored.filter(r=>r.met===n).length),backgroundColor:[css("--green"),css("--amber"),"#e8843b",css("--red")],borderRadius:5,barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:css("--line")}},x:{grid:{display:false}}}}});
+  // v2: top five / bottom five (scored, not in training); ties broken by how far above target
+  const elig=scored.slice().sort((a,b)=>b.total-a.total||b.over-a.over);
+  const rk=(id,list)=>{ $(id).innerHTML=`<thead><tr><th class="nosort">#</th><th class="nosort">Agent</th><th class="nosort">Coach</th><th class="num nosort">Pillars</th><th class="num nosort">Score</th></tr></thead><tbody>`+
+    (list.length?list.map(([r,i])=>`<tr><td>${i}</td><td>${agentLink(r)}</td><td>${esc(r.coach)}</td><td class="num">${r.met} / ${NP}</td><td class="num score-cell" style="color:${scoreColor(r.total)}">${r1(r.total).toFixed(1)}</td></tr>`).join("")
+      :`<tr><td colspan="5" class="empty">No scored agents in the current view.</td></tr>`)+"</tbody>"; };
+  rk("#topTbl",elig.slice(0,5).map((r,i)=>[r,i+1]));
+  rk("#botTbl",elig.slice(-5).reverse().map((r,i)=>[r,elig.length-i]));
+  const rn=`Scored agents, not in training (${elig.length}). Ties are broken by how far each agent is above target across the pillars.`;
+  $("#topNote").textContent=rn; $("#botNote").textContent=rn;
   // table
   rows.forEach(r=>{ r.csatSort=r.csatQual; });
-  const sorted=sortRows("scoreTbl",rows,"total",1);
-  const ptsTxt=(r,k)=>r.pts[k]==null?'<span class="pts">no data · not scored</span>':`<span class="pts">${r1(r.pts[k])} pts</span>`;
+  const shown=act?rows.filter(r=>act.f(r,NP)):rows;
+  const sorted=sortRows("scoreTbl",shown,"totalSort",1);
+  const ptsTxt=(r,k)=>r.pts[k]==null?'<span class="pts">not scored</span>':`<span class="pts">${r1(r.pts[k])} pts</span>`;
   $("#scoreTbl tbody").innerHTML=sorted.map(r=>`<tr>
-    <td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}${groupTxt(r)}</td><td>${esc(r.coach)}</td>
+    <td>${agentLink(r)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}${groupTxt(r)}</td><td>${esc(r.coach)}</td>
     <td class="num">${badge(r.prodPct,T.productive,fmtPct(r.prodPct))}${ptsTxt(r,"prod")}</td>
-    <td class="num">${badge(r.qaAvg,r.qaGoal,fmtPct(r.qaAvg))}<span class="pts">${r.qa.length} eval${r.qa.length===1?"":"s"} · goal ${r.qaGoal}%</span></td>
+    <td class="num">${badge(r.qaAvg,r.qaGoal,fmtPct(r.qaAvg))}${r.lowQA?lowTag:""}<span class="pts">${r.qa.length} eval${r.qa.length===1?"":"s"} · goal ${r.qaGoal}%</span></td>
     <td class="num">${NP===3?paceBadge(r,r.csatQual+" / "+r.csatTarget)+ptsTxt(r,"csat"):'<span class="badge b-grey">No file</span>'}<span class="pts">${NP===3?r.icQual+" Intercom · "+r.qlQual+" Qualtrics":""}</span></td>
     <td>${NP===3?paceBadge(r,r.csatPace):"-"}</td>
-    <td class="num">${r.met} / ${NP}</td>
-    <td class="num score-cell" style="color:${scoreColor(r.total)}">${isFinite(r.total)?r1(r.total).toFixed(1):"-"}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">No agents in the current view.</td></tr>`;
-  $("#scoreHint").textContent=`${C.P.label}. Productivity ${T.productive}% target · QA goal by brand · CSAT ${rows[0]?rows[0].csatTarget:3} qualifying surveys (expected ${rows[0]?rows[0].csatExpected:0} by now). Agents in training are shown but excluded from team and coach rollups. Click a header to sort.`;
+    <td class="num">${r.scored?r.met+" / "+NP:"-"}</td>
+    <td class="num score-cell" style="color:${scoreColor(r.total)}">${r.scored?r1(r.total).toFixed(1):`<span class="badge b-grey" title="Missing: ${r.missing.map(m=>m==="prod"?"Productivity":"QA ("+CONFIG.targets.minQaEvals+"+ evaluations)").join(", ")}">Not enough data</span>`}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">No agents in the current view.</td></tr>`;
+  $("#scoreHint").textContent=`${C.P.label}. Productivity ${T.productive}% target · QA goal by brand, ${T.minQaEvals}+ evaluations to count · CSAT ${rows[0]?rows[0].csatTarget:3} qualifying surveys, ${rows[0]?rows[0].csatExpected:0} expected so far (${asOfTxt}). Agents in training are shown but excluded from team and coach rollups. Click a header to sort.`;
   bindSort("scoreTbl");
 }
 
@@ -1244,36 +1488,37 @@ function renderProd(C){
   $("#pTargetTxt").textContent=T.productive; $("#pGoalMark").style.left=T.productive+"%"; $("#pGoalMark .goal-txt").textContent=T.productive+"%";
   setHero("#pHero",pct,T.productive,fmtPct,100);
   statCards("#pStats",[
-    {l:"Logged In",v:fmtHrs(login).split(":").slice(0,2).join(":"),d:"hours, team total",c:"#1d2733"},
-    {l:"Productive",v:fmtHrs(prod).split(":").slice(0,2).join(":"),d:"hours toward target",c:"#1f9d55"},
-    {l:"Agents",v:rows.length,d:`${rows.length-roll.length} in training`,c:"#3d7bd6"},
-    {l:"At Target",v:roll.filter(r=>r.prodPct>=T.productive).length,d:`agents at ${T.productive}%+`,c:"#1f9d55"},
-    {l:"Below",v:roll.filter(r=>r.prodPct<T.productive).length,d:`agents under ${T.productive}%`,c:"#d64545"},
-    {l:"Lowest",v:fmtPct(Math.min(...roll.map(r=>r.prodPct))),d:"single agent",c:"#d64545"},
+    {l:"Logged In",v:fmtHrs(login).split(":").slice(0,2).join(":"),d:"hours, team total",c:css("--ink")},
+    {l:"Productive",v:fmtHrs(prod).split(":").slice(0,2).join(":"),d:"hours toward target",c:css("--green")},
+    {l:"Agents",v:rows.length,d:`${rows.length-roll.length} in training`,c:css("--blue")},
+    {l:"At Target",v:roll.filter(r=>r.prodPct>=T.productive).length,d:`agents at ${T.productive}%+`,c:css("--green")},
+    {l:"Below",v:roll.filter(r=>r.prodPct<T.productive).length,d:`agents under ${T.productive}%`,c:css("--red")},
+    {l:"Lowest",v:roll.length?fmtPct(Math.min(...roll.map(r=>r.prodPct))):"-",d:"single agent",c:css("--red")},
   ]);
   const ranked=rows.slice().sort((a,b)=>a.prodPct-b.prodPct);
   hbar("prodAgentChart","prodAgentBox",ranked.map(r=>r.name+(r.trainee?" (training)":"")),[{data:ranked.map(r=>r1(r.prodPct)),backgroundColor:ranked.map(r=>colorFor(r.prodPct,T.productive)),borderRadius:3,barThickness:11}],
-    {max:100,rowH:18,goal:T.productive,goalLabel:T.productive+"% target",xfmt:v=>v+"%",valueFmt:v=>v.toFixed(1)+"%",tip:{label:c=>c.raw+"% · "+fmtHrs(ranked[c.dataIndex].login)+" logged in"}});
+    {max:100,rowH:18,goal:T.productive,goalLabel:T.productive+"% target",xfmt:v=>v+"%",valueFmt:v=>v.toFixed(1)+"%",
+     onClick:(e,els)=>{ if(els.length) openDrawer(ranked[els[0].index].key); },
+     tip:{label:c=>c.raw+"% · "+fmtHrs(ranked[c.dataIndex].login)+" logged in"}});
   const byC={}; roll.forEach(r=>{const o=byC[r.coach]=byC[r.coach]||{l:0,p:0,n:0}; o.l+=r.login; o.p+=r.prod; o.n++;});
   const cl=Object.keys(byC).sort((a,b)=>byC[a].p/byC[a].l-byC[b].p/byC[b].l); const cv=cl.map(c=>r1(byC[c].p/byC[c].l*100));
   hbar("prodCoachChart","prodCoachBox",cl,[{data:cv,backgroundColor:cv.map(v=>colorFor(v,T.productive)),borderRadius:4,barThickness:16}],{max:100,rowH:28,goal:T.productive,goalLabel:"",xfmt:v=>v+"%",valueFmt:v=>v.toFixed(1)+"%",tip:{label:c=>c.raw+"% ("+byC[cl[c.dataIndex]].n+" agents)"}});
-  // trend: every day in the selected quarters/months; days picked in the Day filter are highlighted
   const byD={};
   S.tss.forEach(x=>{ if(!P.hasNoDay(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)||trainingDay(a,x.date)) return;
     const o=byD[x.date]=byD[x.date]||{l:0,p:0}; o.l+=x.loggedin; o.p+=x.prod; });
   const ds=Object.keys(byD).sort(); kill("prodTrendChart");
-  const sel=d=>F.day.has(d);
+  const sel=d=>F.day.has(d), cg=css("--prod");
   S.charts.prodTrendChart=new Chart($("#prodTrendChart"),{type:"line",data:{labels:ds.map(d=>d.slice(5).replace("-","/")),
-    datasets:[{data:ds.map(d=>r1(byD[d].p/byD[d].l*100)),borderColor:"#0f7a3d",backgroundColor:"rgba(31,157,85,.08)",fill:true,tension:.3,borderWidth:2,
-      pointRadius:ds.map(d=>sel(d)?7:2.5),pointHoverRadius:7,pointBackgroundColor:ds.map(d=>sel(d)?"#ff5000":"#0f7a3d"),pointBorderColor:ds.map(d=>sel(d)?"#fff":"#0f7a3d"),pointBorderWidth:ds.map(d=>sel(d)?2:1)}]},
+    datasets:[{data:ds.map(d=>r1(byD[d].p/byD[d].l*100)),borderColor:cg,backgroundColor:"rgba(31,157,85,.08)",fill:true,tension:.3,borderWidth:2,
+      pointRadius:ds.map(d=>sel(d)?7:2.5),pointHoverRadius:7,pointBackgroundColor:ds.map(d=>sel(d)?css("--orange"):cg),pointBorderColor:ds.map(d=>sel(d)?"#fff":cg),pointBorderWidth:ds.map(d=>sel(d)?2:1)}]},
     options:{responsive:true,maintainAspectRatio:false,
       onClick:(e,els)=>{ if(!els.length) return; const d=ds[els[0].index]; if(F.day.has(d)) F.day.delete(d); else F.day.add(d); MS.day.draw(); renderAll(); },
       onHover:(e,els)=>{ e.native.target.style.cursor=els.length?"pointer":"default"; },
-      plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>dayLabel(ds[it[0].dataIndex]),label:c=>c.raw+"% productive"+(sel(ds[c.dataIndex])?" · selected":""),footer:()=>"Click to "+"select or clear this day"}}},
-      scales:{y:{suggestedMin:60,suggestedMax:95,ticks:{callback:v=>v+"%"},grid:{color:"#eef1f4"}},x:{grid:{display:false},ticks:{maxTicksLimit:14}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>dayLabel(ds[it[0].dataIndex]),label:c=>c.raw+"% productive"+(sel(ds[c.dataIndex])?" · selected":""),footer:()=>"Click to select or clear this day"}}},
+      scales:{y:{suggestedMin:60,suggestedMax:95,ticks:{callback:v=>v+"%"},grid:{color:css("--line")}},x:{grid:{display:false},ticks:{maxTicksLimit:14}}}},
     plugins:[goalLine(T.productive,"y",T.productive+"% target")]});
   rows.forEach(r=>{r.pct=r.prodPct; r.nonprod=r.login-r.prod;});
-  $("#prodTbl tbody").innerHTML=sortRows("prodTbl",rows,"pct",1).map(r=>`<tr><td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
+  $("#prodTbl tbody").innerHTML=sortRows("prodTbl",rows,"pct",1).map(r=>`<tr><td>${agentLink(r)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
     <td class="num">${r.days}</td><td class="num">${fmtHrs(r.login)}</td><td class="num">${fmtHrs(r.prod)}</td><td class="num">${fmtHrs(r.nonprod)}</td>
     <td class="num">${badge(r.prodPct,T.productive,fmtPct(r.prodPct))}</td></tr>`).join("") || `<tr><td colspan="8" class="empty">No TSS time in the current view.</td></tr>`;
   bindSort("prodTbl");
@@ -1290,31 +1535,34 @@ function renderQA(C){
   setHero("#qThryv",avg(tS),T.qaThryv,fmtPct); $("#qThryvDesc").textContent=`Goal ${T.qaThryv}% · ${tS.length} evaluations`;
   setHero("#qKeap",avg(kS),T.qaKeap,fmtPct); $("#qKeapDesc").textContent=`Goal ${T.qaKeap}% · ${kS.length} evaluations`;
   const all=rows.flatMap(r=>r.qa.map(x=>x.score));
+  const ok=roll.filter(r=>!r.lowQA);
   statCards("#qStats",[
-    {l:"Evaluations",v:all.length,d:"in current view",c:"#1d2733"},
-    {l:"Agents",v:rows.length,d:"evaluated",c:"#3d7bd6"},
-    {l:"At Goal",v:roll.filter(r=>r.qaAvg>=r.qaGoal).length,d:"agents at brand goal",c:"#1f9d55"},
-    {l:"Below Goal",v:roll.filter(r=>r.qaAvg<r.qaGoal).length,d:"agents under goal",c:"#d64545"},
-    {l:"Highest",v:(all.length?Math.max(...all):0)+"%",d:"single evaluation",c:"#1f9d55"},
-    {l:"Lowest",v:(all.length?Math.min(...all):0)+"%",d:"single evaluation",c:"#d64545"},
+    {l:"Evaluations",v:all.length,d:"in current view",c:css("--ink")},
+    {l:"Agents",v:rows.length,d:"evaluated",c:css("--blue")},
+    {l:"At Goal",v:ok.filter(r=>r.qaAvg>=r.qaGoal).length,d:`agents at brand goal (${T.minQaEvals}+ evals)`,c:css("--green")},
+    {l:"Below Goal",v:ok.filter(r=>r.qaAvg<r.qaGoal).length,d:"agents under goal",c:css("--red")},
+    {l:"Low Sample",v:roll.filter(r=>r.lowQA).length,d:`under ${T.minQaEvals} evaluations`,c:css("--amber")},
+    {l:"Lowest",v:(all.length?r1(Math.min(...all)):0)+"%",d:"single evaluation",c:css("--red")},
   ]);
   const ranked=rows.slice().sort((a,b)=>(a.qaAvg-a.qaGoal)-(b.qaAvg-b.qaGoal));
-  hbar("qaAgentChart","qaAgentBox",ranked.map(r=>r.name+" ("+brandName(r.brand)+")"),[{data:ranked.map(r=>r1(r.qaAvg)),backgroundColor:ranked.map(r=>colorFor(r.qaAvg,r.qaGoal)),borderRadius:3,barThickness:11}],
-    {max:100,rowH:17,xfmt:v=>v+"%",tip:{label:c=>{const r=ranked[c.dataIndex]; return c.raw+"% · goal "+r.qaGoal+"% · "+r.qa.length+" evals";}}});
+  hbar("qaAgentChart","qaAgentBox",ranked.map(r=>r.name+" ("+brandName(r.brand)+")"+(r.lowQA?" *":"")),[{data:ranked.map(r=>r1(r.qaAvg)),backgroundColor:ranked.map(r=>colorFor(r.qaAvg,r.qaGoal)),borderRadius:3,barThickness:11}],
+    {max:100,rowH:17,xfmt:v=>v+"%",onClick:(e,els)=>{ if(els.length) openDrawer(ranked[els[0].index].key); },
+     tip:{label:c=>{const r=ranked[c.dataIndex]; return c.raw+"% · goal "+r.qaGoal+"% · "+r.qa.length+" evals"+(r.lowQA?" (low sample)":"");}}});
   const byC={}; roll.forEach(r=>{(byC[r.coach]=byC[r.coach]||{s:[],g:r.qaGoal}).s.push(...r.qa.map(x=>x.score));});
   const cl=Object.keys(byC).sort((a,b)=>avg(byC[a].s)-avg(byC[b].s)); const cv=cl.map(c=>r1(avg(byC[c].s)));
-  hbar("qaCoachChart","qaCoachBox",cl,[{data:cv,backgroundColor:cl.map((c,i)=>colorFor(cv[i],byC[c].g)),borderRadius:4,barThickness:16}],{max:100,rowH:26,xfmt:v=>v+"%",tip:{label:c=>c.raw+"% ("+byC[cl[c.dataIndex]].s.length+" evals)"}});
+  hbar("qaCoachChart","qaCoachBox",cl,[{data:cv,backgroundColor:cl.map((c,i)=>colorFor(cv[i],byC[c].g)),borderRadius:4,barThickness:16}],{max:100,rowH:26,xfmt:v=>v+"%",valueFmt:v=>v.toFixed(1)+"%",tip:{label:c=>c.raw+"% ("+byC[cl[c.dataIndex]].s.length+" evals)"}});
   const byCh={}; ev.forEach(x=>(byCh[x.channel]=byCh[x.channel]||[]).push(x.score)); const chl=Object.keys(byCh).sort();
   kill("qaChannelChart");
-  S.charts.qaChannelChart=new Chart($("#qaChannelChart"),{type:"bar",data:{labels:chl,datasets:[{data:chl.map(c=>r1(avg(byCh[c]))),backgroundColor:"#3d7bd6",borderRadius:5,barThickness:34}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+"% ("+byCh[chl[c.dataIndex]].length+" evals)"}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
+  S.charts.qaChannelChart=new Chart($("#qaChannelChart"),{type:"bar",data:{labels:chl,datasets:[{data:chl.map(c=>r1(avg(byCh[c]))),backgroundColor:css("--qa"),borderRadius:5,barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+"% ("+byCh[chl[c.dataIndex]].length+" evals)"}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"},grid:{color:css("--line")}},x:{grid:{display:false}}}}});
   kill("qaDistChart");
-  S.charts.qaDistChart=new Chart($("#qaDistChart"),{type:"bar",data:{labels:["<70","70-79","80-89","90-100"],datasets:[{data:[all.filter(s=>s<70).length,all.filter(s=>s>=70&&s<80).length,all.filter(s=>s>=80&&s<90).length,all.filter(s=>s>=90).length],backgroundColor:["#d64545","#e8843b","#f0a020","#1f9d55"],borderRadius:5,barThickness:34}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
-  rows.forEach(r=>{r.n=r.qa.length; r.avg=r.qaAvg; r.goal=r.qaGoal; r.gap=r.qaAvg-r.qaGoal; r.status=r.qaAvg>=r.qaGoal?"Meeting goal":"Below goal";});
-  $("#qaTbl tbody").innerHTML=sortRows("qaTbl",rows,"gap",1).map(r=>`<tr><td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
+  S.charts.qaDistChart=new Chart($("#qaDistChart"),{type:"bar",data:{labels:["<70","70-79","80-89","90-100"],datasets:[{data:[all.filter(s=>s<70).length,all.filter(s=>s>=70&&s<80).length,all.filter(s=>s>=80&&s<90).length,all.filter(s=>s>=90).length],backgroundColor:[css("--red"),"#e8843b",css("--amber"),css("--green")],borderRadius:5,barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:css("--line")}},x:{grid:{display:false}}}}});
+  rows.forEach(r=>{r.n=r.qa.length; r.avg=r.qaAvg; r.goal=r.qaGoal; r.gap=r.qaAvg-r.qaGoal; r.status=r.lowQA?"Low sample":(r.qaAvg>=r.qaGoal?"Meeting goal":"Below goal");});
+  $("#qaTbl tbody").innerHTML=sortRows("qaTbl",rows,"gap",1).map(r=>`<tr><td>${agentLink(r)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
     <td class="num">${r.n}</td><td class="num">${badge(r.qaAvg,r.qaGoal,fmtPct(r.qaAvg))}</td><td class="num">${r.qaGoal}%</td>
-    <td class="num">${r.gap>=0?"-":r1(r.gap)}</td><td><span class="badge ${r.gap>=0?"b-green":"b-red"}">${r.status}</span></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No QA evaluations in the current view.</td></tr>`;
+    <td class="num">${r.gap>=0?"-":r1(r.gap)}</td><td><span class="badge ${r.lowQA?"b-amber":(r.gap>=0?"b-green":"b-red")}">${r.status}</span></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No QA evaluations in the current view.</td></tr>`;
+  $("#qaTblHint").innerHTML=`Ranked lowest to highest against goal. Agents marked * have fewer than ${T.minQaEvals} evaluations, so their QA does not count toward a KPI score yet. For evaluation-level detail, see the <a href="https://timramosthryv.github.io/thryv-support-evaluations/" target="_blank" rel="noopener">Thryv</a> and <a href="https://timramosthryv.github.io/keap-support-qa-evaluations/" target="_blank" rel="noopener">Keap</a> QA dashboards.`;
   bindSort("qaTbl");
 }
 
@@ -1327,48 +1575,50 @@ function renderCSAT(C){
   const has=S.intercom.length+S.qualtrics.length>0;
   const met=roll.filter(r=>r.csatQual>=r.csatTarget).length;
   $("#cHeroVal").textContent=has?(met+" of "+roll.length):"-";
-  $("#cHeroDesc").textContent=`${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys for ${P.months.length} month${P.months.length===1?"":"s"} (1 per month) · Intercom + Qualtrics combined · ${P.label}`;
+  $("#cHeroDesc").textContent=`${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys for ${P.months.length} month${P.months.length===1?"":"s"} (1 per month) · ${rows[0]?rows[0].csatExpected:0} expected so far · ${C.csatAsOf?"CSAT data through "+C.csatAsOf:"no CSAT file yet"} · ${P.label}`;
   $("#cHeroBar").style.width=(roll.length?met/roll.length*100:0)+"%"; $("#cHeroBar").style.background="var(--orange)";
   const behind=roll.filter(r=>r.csatPace==="Behind").length;
   $("#cHeroPill").className="pill "+(!has?"under":behind?"close":"over");
   $("#cHeroPill").textContent=!has?"Waiting on Intercom / Qualtrics files":(behind?behind+" behind pace":"Everyone on pace");
   const icAll=roll.flatMap(r=>r.ic), qlAll=roll.flatMap(r=>r.ql);
   statCards("#cStats",[
-    {l:"Intercom Ratings",v:icAll.length,d:"teammate ratings",c:"#3d7bd6"},
-    {l:"Intercom Qualifying",v:icAll.filter(x=>x.rating>=st.intercomMin).length,d:st.intercomMin===5?"Amazing only":"Great or Amazing",c:"#1f9d55"},
-    {l:"Qualtrics Surveys",v:qlAll.length,d:"responses",c:"#3d7bd6"},
-    {l:"Qualtrics 9-10",v:qlAll.filter(x=>x.score>=st.qualtricsMin).length,d:st.qualtricsMin===10?"10s only":"9s and 10s",c:"#1f9d55"},
-    {l:"On Pace",v:roll.filter(r=>r.csatPace!=="Behind").length,d:`expected ${rows[0]?rows[0].csatExpected:0} by now`,c:"#1f9d55"},
-    {l:"Behind",v:behind,d:"under monthly pacing",c:"#d64545"},
+    {l:"Intercom Ratings",v:icAll.length,d:"teammate ratings",c:css("--blue")},
+    {l:"Intercom Qualifying",v:icAll.filter(x=>x.rating>=st.intercomMin).length,d:st.intercomMin===5?"Amazing only":"Great or Amazing",c:css("--green")},
+    {l:"Qualtrics Surveys",v:qlAll.length,d:"responses",c:css("--blue")},
+    {l:"Qualtrics 9-10",v:qlAll.filter(x=>x.score>=st.qualtricsMin).length,d:st.qualtricsMin===10?"10s only":"9s and 10s",c:css("--green")},
+    {l:"On Pace",v:roll.filter(r=>r.csatPace!=="Behind").length,d:`expected ${rows[0]?rows[0].csatExpected:0} so far`,c:css("--green")},
+    {l:"Behind",v:behind,d:"under monthly pacing",c:css("--red")},
   ]);
   const ranked=rows.slice().sort((a,b)=>a.csatQual-b.csatQual||a.name.localeCompare(b.name));
   hbar("csatAgentChart","csatAgentBox",ranked.map(r=>r.name+(r.trainee?" (training)":"")),[
-    {label:"Intercom",data:ranked.map(r=>r.icQual),backgroundColor:"#3d7bd6",barThickness:11},
-    {label:"Qualtrics",data:ranked.map(r=>r.qlQual),backgroundColor:"#ff5000",barThickness:11}],
-    {stacked:true,legend:true,rowH:17,goal:rows[0]?rows[0].csatTarget:3,goalLabel:"goal",max:Math.max(rows[0]?rows[0].csatTarget+1:4,...ranked.map(r=>r.csatQual+1))});
+    {label:"Intercom",data:ranked.map(r=>r.icQual),backgroundColor:css("--blue"),barThickness:11},
+    {label:"Qualtrics",data:ranked.map(r=>r.qlQual),backgroundColor:css("--orange"),barThickness:11}],
+    {stacked:true,legend:true,rowH:17,goal:rows[0]?rows[0].csatTarget:3,goalLabel:"goal",onClick:(e,els)=>{ if(els.length) openDrawer(ranked[els[0].index].key); },
+     max:Math.max(rows[0]?rows[0].csatTarget+1:4,...ranked.map(r=>r.csatQual+1))});
   const mix=[1,2,3,4,5].map(n=>icAll.filter(x=>x.rating===n).length);
   kill("csatMixChart");
-  S.charts.csatMixChart=new Chart($("#csatMixChart"),{type:"bar",data:{labels:["Terrible","Bad","Ok","Great","Amazing"],datasets:[{data:mix,backgroundColor:["#d64545","#e8843b","#c7ced6",st.intercomMin<=4?"#1f9d55":"#9fd5b5","#1f9d55"],borderRadius:5,barThickness:30}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}},x:{grid:{display:false}}}}});
+  S.charts.csatMixChart=new Chart($("#csatMixChart"),{type:"bar",data:{labels:["Terrible","Bad","Ok","Great","Amazing"],datasets:[{data:mix,backgroundColor:[css("--red"),"#e8843b",css("--muted"),st.intercomMin<=4?css("--green"):"#9fd5b5",css("--green")],borderRadius:5,barThickness:30}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:css("--line")}},x:{grid:{display:false}}}}});
   const months=P.months; const qualBy=(arr,test,m)=>arr.filter(x=>monthOf(x.date)===m&&test(x)).length;
   kill("csatMonthChart");
   S.charts.csatMonthChart=new Chart($("#csatMonthChart"),{type:"bar",data:{labels:months.map(monthLabel),datasets:[
-    {label:"Intercom",data:months.map(m=>qualBy(icAll,x=>x.rating>=st.intercomMin,m)),backgroundColor:"#3d7bd6",barThickness:34},
-    {label:"Qualtrics",data:months.map(m=>qualBy(qlAll,x=>x.score>=st.qualtricsMin,m)),backgroundColor:"#ff5000",barThickness:34}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top",labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0},grid:{color:"#eef1f4"}}}}});
-  // table
+    {label:"Intercom",data:months.map(m=>qualBy(icAll,x=>x.rating>=st.intercomMin,m)),backgroundColor:css("--blue"),barThickness:34},
+    {label:"Qualtrics",data:months.map(m=>qualBy(qlAll,x=>x.score>=st.qualtricsMin,m)),backgroundColor:css("--orange"),barThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top",labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0},grid:{color:css("--line")}}}}});
   const mcols=months.map(m=>({k:"m_"+m,t:MON[(+m.slice(5,7))-1]}));
   $("#csatHeadRow").innerHTML=`<th data-k="name">Agent</th><th data-k="brand">Brand</th><th data-k="coach">Coach</th>
     <th data-k="icN" class="num">Intercom Ratings</th><th data-k="icQual" class="num">Intercom Qualifying</th>
     <th data-k="qlN" class="num">Qualtrics Surveys</th><th data-k="qlQual" class="num">Qualtrics 9-10</th>
     ${mcols.map(c=>`<th data-k="${c.k}" class="num">${c.t}</th>`).join("")}<th data-k="csatQual" class="num">Total Qualifying</th><th data-k="csatPace">Pacing</th>`;
   rows.forEach(r=>{ r.icN=r.ic.length; r.qlN=r.ql.length; months.forEach(m=>r["m_"+m]=qualBy(r.ic,x=>x.rating>=st.intercomMin,m)+qualBy(r.ql,x=>x.score>=st.qualtricsMin,m)); });
-  $("#csatTbl tbody").innerHTML=sortRows("csatTbl",rows,"csatQual",1).map(r=>`<tr><td>${esc(r.name)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
+  // v2: a month is graded only once the CSAT files cover it
+  const graded=m=>C.csatAsOf && lastWeekday(m)<=C.csatAsOf;
+  $("#csatTbl tbody").innerHTML=sortRows("csatTbl",rows,"csatQual",1).map(r=>`<tr><td>${agentLink(r)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
     <td class="num">${r.icN}</td><td class="num">${r.icQual}</td><td class="num">${r.qlN}</td><td class="num">${r.qlQual}</td>
-    ${months.map(m=>`<td class="num"><span class="badge ${m>monthOf(todayISO())?"b-grey":(r["m_"+m]>=T.csatPerMonth?"b-green":"b-red")}">${m>monthOf(todayISO())?"-":r["m_"+m]}</span></td>`).join("")}
+    ${months.map(m=>`<td class="num"><span class="badge ${!graded(m)?"b-grey":(r["m_"+m]>=T.csatPerMonth?"b-green":"b-red")}">${m>monthOf(todayISO())?"-":r["m_"+m]}</span></td>`).join("")}
     <td class="num">${paceBadge(r,r.csatQual+" / "+r.csatTarget)}</td>
     <td>${paceBadge(r,r.csatPace)}</td></tr>`).join("") || `<tr><td colspan="12" class="empty">No agents in the current view.</td></tr>`;
-  $("#csatTblHint").textContent=`Qualifying = Intercom ${st.intercomMin===5?"Amazing":"Great or Amazing"}, or Qualtrics ${st.qualtricsMin===10?"10":"9 or 10"}. Monthly cells are green at ${T.csatPerMonth}+ (the pacing target). Intercom ratings are credited to the agent's roster brand, not the conversation's current team.`;
+  $("#csatTblHint").textContent=`Qualifying = Intercom ${st.intercomMin===5?"Amazing":"Great or Amazing"}, or Qualtrics ${st.qualtricsMin===10?"10":"9 or 10"}. Monthly cells turn green at ${T.csatPerMonth}+ once the CSAT files cover that month; grey means not graded yet. Intercom ratings are credited to the agent's roster brand, not the conversation's current team. Qualtrics responses are dated ${CONFIG.qualtricsNoDateAs} until the export includes a response date.`;
   bindSort("csatTbl");
 }
 
@@ -1379,9 +1629,30 @@ function renderData(){
   const T=CONFIG.targets;
   $("#setMethod").value=S.settings.method; $("#setIntercom").value=String(S.settings.intercomMin);
   $("#setQualtrics").value=String(S.settings.qualtricsMin); $("#setMissing").value=S.settings.missing;
-  $("#targetsNote").innerHTML=`<b>Targets in use</b> (edit the CONFIG block in index.html to change): Productive ${T.productive}% · QA TSS ${T.qaThryv}% · QA Keap ${T.qaKeap}% · CSAT ${T.csatPerQuarter} qualifying per quarter, ${T.csatPerMonth} per month pacing · weights 33.3% each.<br>
+  $("#targetsNote").innerHTML=`<b>Targets in use</b> (edit the CONFIG block in index.html to change): Productive ${T.productive}% · QA TSS ${T.qaThryv}% · QA Keap ${T.qaKeap}% · QA counts after ${T.minQaEvals} evaluations · CSAT ${T.csatPerQuarter} qualifying per quarter, ${T.csatPerMonth} per month pacing · weights 33.3% each · Team score goal: ${T.teamScoreGoal==null?"not set":T.teamScoreGoal}.<br>
+    <b>CSAT pacing</b>: counts months the CSAT files fully cover (${csatAsOf()?"currently through "+csatAsOf():"no CSAT file loaded"}), so pacing waits for your next export instead of penalizing agents for a month that has not been uploaded.<br>
     <b>Brand (TSS vs Keap)</b>: taken from each agent's most recent group in TSS Agent Time (Keap Support = Keap, every DR and Delhi group = TSS). Agents not in TSS Agent Time fall back to the QA file they appear in. A roster file, once added, overrides both.<br>
     <b>Training window</b>: ${TRAINING_START} to ${TRAINING_END} for ${TRAINING_AGENTS.length} agents carried over from the TSS dashboard. Add a <i>Training End</i> date in the roster to manage this per agent.`;
+  // v2: data checks
+  const C=compute(); const dq=[];
+  const dupMap=new Map(); S.qa.filter(x=>x.txn).forEach(x=>{ const k=x.brand+"|"+x.txn+"|"+norm(x.agent)+"|"+x.template; dupMap.set(k,(dupMap.get(k)||0)+1); });
+  const dups=[...dupMap.values()].filter(n=>n>1).length;
+  dq.push(["Repeated QA evaluations",dups,dups?"warn":"ok",dups?"Same brand, transaction ID, agent and template appear more than once. They may be re-scores or calibrations; all are counted today.":"No repeats"]);
+  const leftOut=S.match.filter(m=>!m.to&&/not on roster/.test(m.method)).length;
+  const unmatched=S.match.filter(m=>!m.to&&!/not on roster/.test(m.method)).length;
+  dq.push(["Names that could not be matched",unmatched,unmatched?"warn":"ok",(unmatched?"See Name Matching Review below. Add aliases to roster.csv to bring them in. ":"Every name on the roster matched. ")+
+    (leftOut?leftOut+" names are left out on purpose because they are not on the roster.":"")]);
+  const ne=C.rows.filter(r=>!r.trainee&&!r.scored);
+  dq.push(["Agents not scored (not enough data)",ne.length,ne.length?"warn":"ok",ne.length?ne.map(r=>r.name+" ("+r.missing.map(m=>m==="prod"?"no productivity":"QA "+r.qa.length+" eval"+(r.qa.length===1?"":"s")).join(", ")+")").join("; "):"Every agent has enough data"]);
+  const asOf=csatAsOf();
+  dq.push(["CSAT coverage",asOf||"none",asOf?"ok":"bad",asOf?"Intercom and Qualtrics data run through "+asOf+". Months after that are not graded for pacing.":"Upload Intercom and Qualtrics exports to score CSAT."]);
+  const assumed=S.qualtrics.filter(x=>x.dateAssumed).length;
+  dq.push(["Qualtrics responses without a response date",assumed,assumed?"warn":"ok",assumed?"Counted on "+CONFIG.qualtricsNoDateAs+" until the export includes a recorded date.":"All responses dated"]);
+  const lowQ=C.rows.filter(r=>!r.trainee&&r.lowQA).length;
+  dq.push(["Agents below the QA minimum",lowQ,lowQ?"warn":"ok",`Fewer than ${T.minQaEvals} evaluations in the current period.`]);
+  const cls={ok:"b-green",warn:"b-amber",bad:"b-red"}, txt={ok:"pass",warn:"review",bad:"fix"};
+  $("#dqTbl").innerHTML='<thead><tr><th class="nosort">Check</th><th class="num nosort">Count</th><th class="nosort">Result</th><th class="nosort">Detail</th></tr></thead><tbody>'+
+    dq.map(([c,n,s,d])=>`<tr><td>${esc(c)}</td><td class="num">${esc(n)}</td><td><span class="badge ${cls[s]}">${txt[s]}</span></td><td style="white-space:normal">${esc(d)}</td></tr>`).join("")+"</tbody>";
   const order=["tss","thryvQA","keapQA","intercom","qualtrics","roster"];
   $("#srcGrid").innerHTML=order.map(k=>{ const c=CONFIG.sources[k], s=S.status[k]||{};
     const b=s.ok?`<span class="badge b-green">Loaded</span>`:(k==="roster"||k==="intercom"||k==="qualtrics")?`<span class="badge b-amber">Not found</span>`:`<span class="badge b-red">Error</span>`;
@@ -1393,35 +1664,135 @@ function renderData(){
     <td>${m.to?(/first name/.test(m.method)?`<span class="badge b-amber">${esc(m.method)}</span>`:`<span class="badge b-blue">${esc(m.method)}</span>`):esc(m.method)}</td><td class="num">${m.n}</td></tr>`).join("")
     || `<tr><td colspan="5" class="empty">Every name matched exactly.</td></tr>`;
   $("#howNote").innerHTML=`<b>Today (GitHub):</b> TSS time and both QA files are read live from the repos your existing dashboards already use, so they stay in sync with no extra steps. Intercom, Qualtrics and the roster are read from this repo's <b>data</b> folder as <b>intercom.csv</b>, <b>qualtrics.csv</b> and <b>roster.csv</b> (CSV or Excel saved under that name).<br><br>
-    <b>Upload button:</b> drop any of the six exports on the page to preview them before they are committed. The file type is detected from its columns.<br><br>
+    <b>CSAT is manual:</b> export from Intercom and Qualtrics, then either upload to the repo's data folder (everyone sees it) or use the <b>Upload</b> button to preview it in your browser first. The file type is detected from its columns.<br><br>
     <b>Next step (SharePoint + Power Automate):</b> point each entry in the CONFIG block at its new location. Nothing else in the page needs to change.`;
 }
+
+/* =====================================================================
+   v2: EXECUTIVE SUMMARY STRIP (three callouts)
+   ===================================================================== */
+function renderSummary(C){
+  const NP=C.NP, roll=C.rows.filter(r=>!r.trainee), scored=roll.filter(r=>r.scored), out=[];
+  // 1. pillars met, and the pillar most often missed
+  const allMet=scored.filter(r=>r.met===NP).length;
+  const T=CONFIG.targets;
+  const miss=[["Productivity",scored.filter(r=>!(r.prodPct>=T.productive)).length],["QA",scored.filter(r=>!(r.qaAvg>=r.qaGoal)).length]];
+  if(NP===3) miss.push(["CSAT",scored.filter(r=>r.csatQual<r.csatTarget).length]);
+  miss.sort((a,b)=>b[1]-a[1]);
+  out.push({cls:allMet/Math.max(1,scored.length)>=.5?"ok":"warn",title:"Pillars met · "+C.P.label,
+    body:`${allMet} of ${scored.length} scored agents meet all ${NP} pillars`,
+    note:`${miss[0][0]} is the pillar missed most often (${miss[0][1]} agents). `+(roll.length-scored.length?`${roll.length-scored.length} agents are not scored yet for lack of data.`:""),
+    go:()=>{ S.tile="one"; switchTab("score"); }});
+  // 2. brand comparison, and which pillar drives the gap
+  const by=b=>scored.filter(r=>r.brand===b);
+  const ptsAvg=(list,k)=>avg(list.map(r=>r.pts[k]==null?0:r.pts[k]));
+  const tss=by("Thryv"), keap=by("Keap");
+  if(tss.length&&keap.length){
+    const ta=avg(tss.map(r=>r.total)), ka=avg(keap.map(r=>r.total));
+    const gaps=["prod","qa","csat"].filter(k=>NP===3||k!=="csat").map(k=>[k,ptsAvg(keap,k)-ptsAvg(tss,k)]).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+    const nm={prod:"Productivity",qa:"QA",csat:"CSAT"};
+    const hi=ka>=ta?["Keap",ka,"TSS",ta]:["TSS",ta,"Keap",ka];
+    out.push({cls:"info",title:"Brand comparison",
+      body:`${hi[0]} averages ${r1(hi[1]).toFixed(1)}, ${hi[2]} ${r1(hi[3]).toFixed(1)}`,
+      note:`${nm[gaps[0][0]]} explains most of the gap (${Math.abs(r1(gaps[0][1])).toFixed(1)} points). `+
+        (gaps[0][0]==="csat"?`TSS agents receive far fewer Intercom ratings, so CSAT volume differs by channel.`:""),
+      go:()=>switchTab(gaps[0][0]==="prod"?"prod":gaps[0][0])});
+  }
+  // 3. coach comparison
+  const byC={}; scored.forEach(r=>(byC[r.coach]=byC[r.coach]||[]).push(r.total));
+  const cs=Object.keys(byC).filter(c=>c!=="Unassigned").map(c=>[c,avg(byC[c]),byC[c].length]).sort((a,b)=>b[1]-a[1]);
+  if(cs.length>=2){ const a=cs[0], z=cs[cs.length-1];
+    out.push({cls:"info",title:"Coach comparison",body:`${a[0]}'s team leads at ${r1(a[1]).toFixed(1)}`,
+      note:`${z[0]}'s team is lowest at ${r1(z[1]).toFixed(1)}, a gap of ${r1(a[1]-z[1]).toFixed(1)} points (${z[2]} scored agents).`,
+      go:()=>switchTab("score")}); }
+  $("#summary").innerHTML=out.slice(0,3).map((c,i)=>`<div class="callout ${c.cls}" data-i="${i}" role="button" tabindex="0"><div class="ct">${esc(c.title)}</div><div class="cb">${esc(c.body)}</div><div class="cn">${esc(c.note)}</div></div>`).join("");
+  $("#summary").querySelectorAll(".callout").forEach(el=>{ const go=()=>{ out[+el.dataset.i].go(); $("#tabs").scrollIntoView({behavior:"smooth",block:"start"}); };
+    el.onclick=go; el.onkeydown=e=>{ if(e.key==="Enter") go(); }; });
+}
+
+/* =====================================================================
+   v2: AGENT DETAIL DRAWER
+   ===================================================================== */
+function openDrawer(key, Cin){
+  const C=Cin||compute(), r=C.rows.find(x=>x.key===key); if(!r) return;
+  S.drawer=key; const T=CONFIG.targets, P=C.P, NP=C.NP, st=S.settings;
+  $("#dTitle").innerHTML=esc(r.name)+brandTag(r.brand)+(r.trainee?trainTag:"");
+  $("#dSub").textContent=`Coach: ${r.coach} · ${r.location} · ${P.label}`;
+  $("#dStats").innerHTML=[
+    {l:"KPI Score",v:r.scored?r1(r.total).toFixed(1):"Not scored",d:r.scored?`${r.met} of ${NP} pillars met`:"Missing: "+r.missing.map(m=>m==="prod"?"Productivity":"QA").join(", "),c:css("--ink")},
+    {l:"Productive %",v:fmtPct(r.prodPct),d:`target ${T.productive}% · ${r.days} days`,c:colorFor(r.prodPct,T.productive)},
+    {l:"QA Average",v:fmtPct(r.qaAvg),d:`${r.qa.length} evals · goal ${r.qaGoal}%${r.lowQA?" · low sample":""}`,c:colorFor(r.qaAvg,r.qaGoal)},
+    {l:"CSAT Qualifying",v:NP===3?r.csatQual+" / "+r.csatTarget:"-",d:NP===3?r.csatPace+` · ${r.icQual} Intercom, ${r.qlQual} Qualtrics`:"no CSAT file",c:css("--orange")},
+    {l:"Logged In",v:fmtHrs(r.login).split(":").slice(0,2).join(":"),d:"hours in period",c:css("--blue")},
+    {l:"Productive",v:fmtHrs(r.prod).split(":").slice(0,2).join(":"),d:"hours in period",c:css("--green")},
+  ].map(s=>`<div class="stat"><div class="top"><span class="slabel">${s.l}</span><span class="dot" style="background:${s.c}"></span></div><div class="sval">${s.v}</div><div class="sdesc">${esc(s.d)}</div></div>`).join("");
+  $("#drawer").classList.add("open"); $("#drawer").setAttribute("aria-hidden","false"); $("#backdrop").classList.remove("hide");
+  const days=S.tss.filter(x=>x.akey===key&&P.has(x.date)).sort((a,b)=>a.date.localeCompare(b.date));
+  kill("dProdChart"); const cg=css("--prod");
+  S.charts.dProdChart=new Chart($("#dProdChart"),{type:"bar",data:{labels:days.map(d=>d.date.slice(5).replace("-","/")),
+    datasets:[{data:days.map(d=>d.loggedin?r1(d.prod/d.loggedin*100):null),backgroundColor:days.map(d=>colorFor(d.loggedin?d.prod/d.loggedin*100:NaN,T.productive)),borderRadius:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+"% · "+fmtHrs(days[c.dataIndex].loggedin)+" logged in"}}},
+      scales:{y:{min:0,max:100,ticks:{callback:v=>v+"%"},grid:{color:css("--line")}},x:{grid:{display:false},ticks:{maxRotation:0,autoSkipPadding:8}}}},
+    plugins:[goalLine(T.productive,"y",T.productive+"%")]});
+  // time breakdown by status
+  const sums={}; let li=0; days.forEach(d=>{ li+=d.loggedin; STATUSES.forEach(s=>sums[s.key]=(sums[s.key]||0)+(d[s.key]||0)); });
+  const tl=STATUSES.map(s=>({k:s.key,h:sums[s.key]||0,p:!!s.productive})).filter(x=>x.h>0.0005).sort((a,b)=>b.h-a.h);
+  $("#dTime").innerHTML='<thead><tr><th class="nosort">Status</th><th class="nosort">Type</th><th class="num nosort">Hours</th><th class="num nosort">Share</th></tr></thead><tbody>'+
+    (tl.length?tl.map(x=>`<tr><td>${esc(STATUS_LABEL[x.k]||x.k)}</td><td><span class="badge ${x.p?"b-green":"b-grey"}">${x.p?"Productive":"Non-productive"}</span></td><td class="num">${fmtHrs(x.h)}</td><td class="num">${li?fmtPct(x.h/li*100):"-"}</td></tr>`).join("")
+      :'<tr><td colspan="4" class="empty">No TSS time in this period.</td></tr>')+"</tbody>";
+  const qa=r.qa.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  $("#dQA").innerHTML='<thead><tr><th class="nosort">Date</th><th class="nosort">Channel</th><th class="nosort">Evaluator</th><th class="num nosort">Score</th></tr></thead><tbody>'+
+    (qa.length?qa.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.channel)}</td><td>${esc(x.evaluator)}</td><td class="num">${badge(x.score,r.qaGoal,fmtPct(x.score))}</td></tr>`).join("")
+      :'<tr><td colspan="4" class="empty">No QA evaluations in this period.</td></tr>')+"</tbody>";
+  const cs=[...r.ic.map(x=>({d:x.date,src:"Intercom",v:RATING_NAME[x.rating]||x.rating,q:x.rating>=st.intercomMin})),
+            ...r.ql.map(x=>({d:x.date+(x.dateAssumed?" *":""),src:"Qualtrics",v:x.score,q:x.score>=st.qualtricsMin}))].sort((a,b)=>b.d.localeCompare(a.d));
+  $("#dCSAT").innerHTML='<thead><tr><th class="nosort">Date</th><th class="nosort">Source</th><th class="nosort">Rating</th><th class="nosort">Qualifying</th></tr></thead><tbody>'+
+    (cs.length?cs.map(x=>`<tr><td>${esc(x.d)}</td><td>${esc(x.src)}</td><td>${esc(x.v)}</td><td><span class="badge ${x.q?"b-green":"b-grey"}">${x.q?"Yes":"No"}</span></td></tr>`).join("")
+      :`<tr><td colspan="4" class="empty">${NP===3?"No surveys in this period.":"No CSAT file loaded yet."}</td></tr>`)+"</tbody>"+
+    (r.ql.some(x=>x.dateAssumed)?`<tfoot><tr><td colspan="4" class="small">* Qualtrics export has no response date; counted on ${esc(CONFIG.qualtricsNoDateAs)}.</td></tr></tfoot>`:"");
+}
+function closeDrawer(){ S.drawer=null; $("#drawer").classList.remove("open"); $("#drawer").setAttribute("aria-hidden","true"); $("#backdrop").classList.add("hide"); }
 
 /* =====================================================================
    RENDER ALL + EVENTS
    ===================================================================== */
 function renderAll(){
+  if(typeof Chart!=="undefined"){ Chart.defaults.color=css("--muted"); Chart.defaults.borderColor=css("--line"); }
   const C=compute();
   try{ if(S.tab==="score") renderScore(C); else if(S.tab==="prod") renderProd(C); else if(S.tab==="qa") renderQA(C); else if(S.tab==="csat") renderCSAT(C); else renderData(); }
   catch(e){ console.error(e); }
+  try{ renderSummary(C); }catch(e){ console.error(e); }
+  if(S.drawer) openDrawer(S.drawer,C);
   const ok=Object.values(S.status).filter(s=>s.ok).length, tot=Object.keys(S.status).length;
   const newest=[...S.tss.map(r=>r.date),...S.qa.map(r=>r.date)].filter(Boolean).sort().pop();
   const up=$("#updated"); up.className="updated"+(ok<tot?" warn":"");
-  up.textContent=(newest?"Data through "+newest:"No data")+` · ${ok} of ${tot} sources loaded`;
+  up.textContent=(newest?"Data through "+newest:"No data")+(C.csatAsOf?" · CSAT through "+C.csatAsOf:" · CSAT not uploaded")+` · ${ok} of ${tot} sources loaded`;
   $("#loaded").textContent=`${S.agents.size} agents · ${S.tss.length.toLocaleString()} agent-days · ${S.qa.length.toLocaleString()} evaluations · ${(S.intercom.length+S.qualtrics.length).toLocaleString()} surveys`;
-  $("#footnote").innerHTML=`Scoring: each pillar is one third of the KPI score. Productive % = (Logged In - Non-Productive) ÷ Logged In, same rules as the TSS dashboard. QA = average evaluation score vs the brand goal. CSAT = qualifying Intercom + Qualtrics surveys vs ${CONFIG.targets.csatPerQuarter} per quarter. ${S.settings.method==="passfail"?"Pass/fail: a pillar earns its full third only when the target is met.":"Proportional: a pillar earns its share of the target, capped at 100%."}`;
+  $("#footnote").innerHTML=`Scoring: each pillar is one third of the KPI score. Productive % = (Logged In - Non-Productive) ÷ Logged In, same rules as the TSS dashboard. QA = average evaluation score vs the brand goal, counted after ${CONFIG.targets.minQaEvals} evaluations. CSAT = qualifying Intercom + Qualtrics surveys vs ${CONFIG.targets.csatPerQuarter} per quarter, paced on months the CSAT files cover. ${S.settings.method==="passfail"?"Pass/fail: a pillar earns its full third only when the target is met.":"Proportional: a pillar earns its share of the target, capped at 100%."} ${S.settings.missing==="require"?"Agents without Productivity data or enough QA evaluations are not scored.":""}`;
   $("#filterBar").style.display=S.tab==="data"?"none":"flex";
 }
-document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{
-  document.querySelectorAll("#tabs button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-  S.tab=b.dataset.t; ["score","prod","qa","csat","data"].forEach(t=>$("#tab-"+t).style.display=t===S.tab?"block":"none");
+function switchTab(t){
+  document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x.dataset.t===t));
+  S.tab=t; ["score","prod","qa","csat","data"].forEach(k=>$("#tab-"+k).style.display=k===t?"block":"none");
   renderAll();
-});
-$("#btnClear").onclick=()=>{ Object.values(F).forEach(s=>s.clear()); F.quarter.add(quarterOf(todayISO())); populateFilters(); renderAll(); };
+}
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.t));
+$("#btnClear").onclick=()=>{ Object.values(F).forEach(s=>s.clear()); F.quarter.add(quarterOf(todayISO())); S.tile=null; populateFilters(); renderAll(); };
 $("#setMethod").onchange=e=>{S.settings.method=e.target.value;saveSettings();renderAll();};
 $("#setIntercom").onchange=e=>{S.settings.intercomMin=+e.target.value;saveSettings();renderAll();};
 $("#setQualtrics").onchange=e=>{S.settings.qualtricsMin=+e.target.value;saveSettings();renderAll();};
 $("#setMissing").onchange=e=>{S.settings.missing=e.target.value;saveSettings();renderAll();};
+/* v2: drawer and theme wiring */
+document.addEventListener("click",e=>{ const el=e.target.closest&&e.target.closest(".csm"); if(el) openDrawer(el.dataset.k); });
+$("#dClose").onclick=closeDrawer; $("#backdrop").onclick=closeDrawer;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&S.drawer) closeDrawer(); });
+$("#btnTheme").onclick=()=>{
+  const cur=document.documentElement.getAttribute("data-theme");
+  const next=cur==="dark"?"light":cur==="light"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"light":"dark");
+  document.documentElement.setAttribute("data-theme",next); try{localStorage.setItem("kpi-theme",next);}catch(_){}
+  renderAll();
+};
+try{ const t=localStorage.getItem("kpi-theme"); if(t) document.documentElement.setAttribute("data-theme",t); }catch(_){}
 
 /* ---- upload: detect the file type from its columns ---- */
 $("#fileIn").onchange=async e=>{
@@ -1447,11 +1818,11 @@ $("#fileIn").onchange=async e=>{
 $("#btnExport").onclick=()=>{
   if(typeof XLSX==="undefined"){alert("Excel library still loading, try again in a moment.");return;}
   const C=compute(), wb=XLSX.utils.book_new(), T=CONFIG.targets;
-  const head=["Agent","Brand","Coach","Location","In Training","Productive %","Productivity Pts","QA Avg %","QA Evals","QA Goal %","QA Pts","Intercom Ratings","Intercom Qualifying","Qualtrics Surveys","Qualtrics Qualifying","CSAT Qualifying","CSAT Target","CSAT Pacing","CSAT Pts","Pillars Met","KPI Score"];
+  const head=["Agent","Brand","Coach","Location","In Training","Status","Productive %","Productivity Pts","QA Avg %","QA Evals","QA Goal %","QA Pts","Intercom Ratings","Intercom Qualifying","Qualtrics Surveys","Qualtrics Qualifying","CSAT Qualifying","CSAT Target","CSAT Expected So Far","CSAT Pacing","CSAT Pts","Pillars Met","KPI Score"];
   const n=v=>isFinite(v)?r1(v):"";
-  const rows=C.rows.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>[r.name,brandName(r.brand),r.coach,r.location,r.trainee?"Yes":"",n(r.prodPct),n(r.pts.prod),n(r.qaAvg),r.qa.length,r.qaGoal,n(r.pts.qa),r.ic.length,r.icQual,r.ql.length,r.qlQual,r.csatQual,r.csatTarget,r.csatPace,n(r.pts.csat),r.met,n(r.total)]);
-  const meta=[["Support KPI Scorecard · TSS & Keap"],["Period",C.P.label],["Generated",new Date().toLocaleString("en-US")],["Scoring",S.settings.method],
-    ["Targets",`Productive ${T.productive}% · QA TSS ${T.qaThryv}% / Keap ${T.qaKeap}% · CSAT ${T.csatPerQuarter} per quarter`],[]];
+  const rows=C.rows.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>[r.name,brandName(r.brand),r.coach,r.location,r.trainee?"Yes":"",r.scored?"Scored":"Not enough data",n(r.prodPct),n(r.pts.prod),n(r.qaAvg),r.qa.length,r.qaGoal,n(r.pts.qa),r.ic.length,r.icQual,r.ql.length,r.qlQual,r.csatQual,r.csatTarget,r.csatExpected,r.csatPace,n(r.pts.csat),r.scored?r.met:"",n(r.total)]);
+  const meta=[["Support KPI Scorecard · TSS & Keap"],["Period",C.P.label],["Generated",new Date().toLocaleString("en-US")],["Scoring",S.settings.method],["CSAT data through",C.csatAsOf||"not loaded"],
+    ["Targets",`Productive ${T.productive}% · QA TSS ${T.qaThryv}% / Keap ${T.qaKeap}% (${T.minQaEvals}+ evals) · CSAT ${T.csatPerQuarter} per quarter`],[]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...meta,head,...rows]),"Scorecard");
   const um=[["Source","Name in Source","Matched To","Method","Rows"],...S.match.map(m=>[m.src,m.raw,m.to,m.method,m.n])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(um),"Name Matching");
@@ -1464,12 +1835,12 @@ $("#btnRoster").onclick=()=>{
     const tr=TRAINING_AGENTS.some(n=>norm(n)===a.key)?TRAINING_END:(a.trainingEnd||"");
     rows.push([a.name,brandName(a.brand),a.coach,a.location,tr,[...(al[a.name]||[]),...a.aliases].join("; ")]); });
   const csv=rows.map(r=>r.map(v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(",")).join("\n");
-  const url=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"})); const a=document.createElement("a"); a.href=url; a.download="roster.csv"; a.click(); URL.revokeObjectURL(url);
+  const url=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"})); const a=document.createElement("a"); a.href=url; a.download="roster.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 
 /* ---- boot ---- */
 loadSettings();
-if(typeof Chart!=="undefined"){ Chart.defaults.font.family="Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"; Chart.defaults.color="#6b7683"; }
+if(typeof Chart!=="undefined"){ Chart.defaults.font.family="Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"; Chart.defaults.color=css("--muted"); }
 loadAll();
 </script>
 </body>
