@@ -12,7 +12,7 @@
   DATA
   1. CSAT pacing counts completed months only, measured through the date of the latest CSAT data
      (not today's date). Because CSAT is exported and uploaded by hand, pacing waits for the upload.
-  2. Agents without Productivity data or with fewer than CONFIG.targets.minQaEvals QA evaluations show
+  2. Agents without Productivity data or without any QA evaluation in the period show
      "Not enough data" and are left out of team, coach and pillar rollups (setting on Data & Settings).
   3. QA scores are no longer rounded before averaging; rounding happens only for display.
   4. Data checks panel: repeated QA transaction IDs, unmatched names, CSAT coverage, Qualtrics date note.
@@ -507,7 +507,7 @@
           </select></div>
         <div class="fld"><label>Agent with missing data</label>
           <select id="setMissing">
-            <option value="require">Not scored until Productivity and QA both have enough data (recommended)</option>
+            <option value="require">Not scored until Productivity and QA both have data (recommended)</option>
             <option value="reweight">Score the pillars that have data and re-weight them</option>
             <option value="zero">Score a missing pillar as 0</option>
           </select></div>
@@ -589,9 +589,9 @@ const CONFIG = {
     qualtrics:{ label:"Qualtrics Survey", kind:"file", url:"data/qualtrics.csv" },
     roster:   { label:"Agent Roster", kind:"file", url:"data/roster.csv" },
   },
-  // v2: minQaEvals = evaluations an agent needs before QA counts toward a KPI score.
+  // v2: minQaEvals = evaluations an agent needs before QA counts. Policy is 1 (any evaluation counts).
   //     teamScoreGoal = optional goal for the Team KPI Score (null hides the goal marker).
-  targets: { productive:75, qaThryv:93, qaKeap:90, csatPerQuarter:3, csatPerMonth:1, minQaEvals:3, teamScoreGoal:null },
+  targets: { productive:75, qaThryv:93, qaKeap:90, csatPerQuarter:3, csatPerMonth:1, minQaEvals:1, teamScoreGoal:null },
   weights: { prod:1/3, qa:1/3, csat:1/3 },
   // Optional: force the Qualtrics column names if auto-detect picks the wrong ones
   // Qualtrics: the KPI counts 9s and 10s on "Likely to Hire" only.
@@ -1237,7 +1237,7 @@ function compute(Pin){
     r.csatTotal = r.ic.length + r.ql.length;
     r.csatTarget=csatTarget; r.csatExpected=csatExpected;
     r.csatPace = r.csatQual>=csatTarget ? "Met" : (csatExpected===0 ? "Not due yet" : (r.csatQual>=csatExpected ? "On pace" : "Behind"));
-    /* v2: under the recommended setting an agent needs Productivity data and enough QA evaluations to be scored */
+    /* v2: under the recommended setting an agent needs Productivity data and at least one QA evaluation to be scored */
     const prodHas=isFinite(r.prodPct), qaHas=st.missing==="require" ? r.qa.length>=minQA : r.qa.length>0;
     r.missing=[]; if(!prodHas) r.missing.push("prod"); if(!qaHas) r.missing.push("qa");
     r.notEnough = st.missing==="require" && r.missing.length>0;
@@ -1414,7 +1414,7 @@ function renderScore(C){
       d:`Target ${T.productive}% · ${metProd} of ${roll.filter(r=>isFinite(r.prodPct)).length} agents at target`,fill:curT.prodPct/T.productive,
       delta:prevT?deltaHTML(curT.prodPct,prevT.prodPct,PP.label," pts"):"",spark:sparkSVG(W.prod,css("--prod"),"Weekly productive %")},
     {t:"QA",c:"--qa",v:`${fmtPct(curT.qaT)} <span class="small">TSS</span> · ${fmtPct(curT.qaK)} <span class="small">Keap</span>`,
-      d:`Goals: TSS ${T.qaThryv}% · Keap ${T.qaKeap}% · ${metQA} of ${qaAgents.length} agents at goal (${T.minQaEvals}+ evaluations) · averaged across evaluations`,
+      d:`Goals: TSS ${T.qaThryv}% · Keap ${T.qaKeap}% · ${metQA} of ${qaAgents.length} agents at goal · averaged across evaluations`,
       fill:qaAgents.length?metQA/qaAgents.length:0,
       delta:prevT?qaDelta(curT,prevT,PP.label):"",
       spark:sparkSVG(W.qa,css("--qa"),"Weekly QA average")},
@@ -1473,8 +1473,8 @@ function renderScore(C){
     <td class="num">${NP===3?paceBadge(r,r.csatQual+" / "+r.csatTarget)+ptsTxt(r,"csat"):'<span class="badge b-grey">No file</span>'}<span class="pts">${NP===3?r.icQual+" Intercom · "+r.qlQual+" Qualtrics":""}</span></td>
     <td>${NP===3?paceBadge(r,r.csatPace):"-"}</td>
     <td class="num">${r.scored?r.met+" / "+NP:"-"}</td>
-    <td class="num score-cell" style="color:${scoreColor(r.total)}">${r.scored?r1(r.total).toFixed(1):`<span class="badge b-grey" title="Missing: ${r.missing.map(m=>m==="prod"?"Productivity":"QA ("+CONFIG.targets.minQaEvals+"+ evaluations)").join(", ")}">Not enough data</span>`}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">No agents in the current view.</td></tr>`;
-  $("#scoreHint").textContent=`${C.P.label}. Productivity ${T.productive}% target · QA goal by brand, ${T.minQaEvals}+ evaluations to count · CSAT ${rows[0]?rows[0].csatTarget:3} qualifying surveys, ${rows[0]?rows[0].csatExpected:0} expected so far (${asOfTxt}). Agents in training are shown but excluded from team and coach rollups. Click a header to sort.`;
+    <td class="num score-cell" style="color:${scoreColor(r.total)}">${r.scored?r1(r.total).toFixed(1):`<span class="badge b-grey" title="Missing: ${r.missing.map(m=>m==="prod"?"Productivity":"QA (no evaluations)").join(", ")}">Not enough data</span>`}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">No agents in the current view.</td></tr>`;
+  $("#scoreHint").textContent=`${C.P.label}. Productivity ${T.productive}% target · QA goal by brand ·CSAT ${rows[0]?rows[0].csatTarget:3} qualifying surveys, ${rows[0]?rows[0].csatExpected:0} expected so far (${asOfTxt}). Agents in training are shown but excluded from team and coach rollups. Click a header to sort.`;
   bindSort("scoreTbl");
 }
 
@@ -1539,9 +1539,9 @@ function renderQA(C){
   statCards("#qStats",[
     {l:"Evaluations",v:all.length,d:"in current view",c:css("--ink")},
     {l:"Agents",v:rows.length,d:"evaluated",c:css("--blue")},
-    {l:"At Goal",v:ok.filter(r=>r.qaAvg>=r.qaGoal).length,d:`agents at brand goal (${T.minQaEvals}+ evals)`,c:css("--green")},
+    {l:"At Goal",v:ok.filter(r=>r.qaAvg>=r.qaGoal).length,d:"agents at brand goal",c:css("--green")},
     {l:"Below Goal",v:ok.filter(r=>r.qaAvg<r.qaGoal).length,d:"agents under goal",c:css("--red")},
-    {l:"Low Sample",v:roll.filter(r=>r.lowQA).length,d:`under ${T.minQaEvals} evaluations`,c:css("--amber")},
+    {l:"Highest",v:(all.length?r1(Math.max(...all)):0)+"%",d:"single evaluation",c:css("--green")},
     {l:"Lowest",v:(all.length?r1(Math.min(...all)):0)+"%",d:"single evaluation",c:css("--red")},
   ]);
   const ranked=rows.slice().sort((a,b)=>(a.qaAvg-a.qaGoal)-(b.qaAvg-b.qaGoal));
@@ -1562,7 +1562,7 @@ function renderQA(C){
   $("#qaTbl tbody").innerHTML=sortRows("qaTbl",rows,"gap",1).map(r=>`<tr><td>${agentLink(r)}${r.trainee?trainTag:""}</td><td>${brandTag(r.brand)}</td><td>${esc(r.coach)}</td>
     <td class="num">${r.n}</td><td class="num">${badge(r.qaAvg,r.qaGoal,fmtPct(r.qaAvg))}</td><td class="num">${r.qaGoal}%</td>
     <td class="num">${r.gap>=0?"-":r1(r.gap)}</td><td><span class="badge ${r.lowQA?"b-amber":(r.gap>=0?"b-green":"b-red")}">${r.status}</span></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No QA evaluations in the current view.</td></tr>`;
-  $("#qaTblHint").innerHTML=`Ranked lowest to highest against goal. Agents marked * have fewer than ${T.minQaEvals} evaluations, so their QA does not count toward a KPI score yet. For evaluation-level detail, see the <a href="https://timramosthryv.github.io/thryv-support-evaluations/" target="_blank" rel="noopener">Thryv</a> and <a href="https://timramosthryv.github.io/keap-support-qa-evaluations/" target="_blank" rel="noopener">Keap</a> QA dashboards.`;
+  $("#qaTblHint").innerHTML=`Ranked lowest to highest against goal. For evaluation-level detail, see the <a href="https://timramosthryv.github.io/thryv-support-evaluations/" target="_blank" rel="noopener">Thryv</a> and <a href="https://timramosthryv.github.io/keap-support-qa-evaluations/" target="_blank" rel="noopener">Keap</a> QA dashboards.`;
   bindSort("qaTbl");
 }
 
@@ -1629,7 +1629,7 @@ function renderData(){
   const T=CONFIG.targets;
   $("#setMethod").value=S.settings.method; $("#setIntercom").value=String(S.settings.intercomMin);
   $("#setQualtrics").value=String(S.settings.qualtricsMin); $("#setMissing").value=S.settings.missing;
-  $("#targetsNote").innerHTML=`<b>Targets in use</b> (edit the CONFIG block in index.html to change): Productive ${T.productive}% · QA TSS ${T.qaThryv}% · QA Keap ${T.qaKeap}% · QA counts after ${T.minQaEvals} evaluations · CSAT ${T.csatPerQuarter} qualifying per quarter, ${T.csatPerMonth} per month pacing · weights 33.3% each · Team score goal: ${T.teamScoreGoal==null?"not set":T.teamScoreGoal}.<br>
+  $("#targetsNote").innerHTML=`<b>Targets in use</b> (edit the CONFIG block in index.html to change): Productive ${T.productive}% · QA TSS ${T.qaThryv}% · QA Keap ${T.qaKeap}% · CSAT ${T.csatPerQuarter} qualifying per quarter, ${T.csatPerMonth} per month pacing · weights 33.3% each · Team score goal: ${T.teamScoreGoal==null?"not set":T.teamScoreGoal}.<br>
     <b>CSAT pacing</b>: counts months the CSAT files fully cover (${csatAsOf()?"currently through "+csatAsOf():"no CSAT file loaded"}), so pacing waits for your next export instead of penalizing agents for a month that has not been uploaded.<br>
     <b>Brand (TSS vs Keap)</b>: taken from each agent's most recent group in TSS Agent Time (Keap Support = Keap, every DR and Delhi group = TSS). Agents not in TSS Agent Time fall back to the QA file they appear in. A roster file, once added, overrides both.<br>
     <b>Training window</b>: ${TRAINING_START} to ${TRAINING_END} for ${TRAINING_AGENTS.length} agents carried over from the TSS dashboard. Add a <i>Training End</i> date in the roster to manage this per agent.`;
@@ -1648,8 +1648,6 @@ function renderData(){
   dq.push(["CSAT coverage",asOf||"none",asOf?"ok":"bad",asOf?"Intercom and Qualtrics data run through "+asOf+". Months after that are not graded for pacing.":"Upload Intercom and Qualtrics exports to score CSAT."]);
   const assumed=S.qualtrics.filter(x=>x.dateAssumed).length;
   dq.push(["Qualtrics responses without a response date",assumed,assumed?"warn":"ok",assumed?"Counted on "+CONFIG.qualtricsNoDateAs+" until the export includes a recorded date.":"All responses dated"]);
-  const lowQ=C.rows.filter(r=>!r.trainee&&r.lowQA).length;
-  dq.push(["Agents below the QA minimum",lowQ,lowQ?"warn":"ok",`Fewer than ${T.minQaEvals} evaluations in the current period.`]);
   const cls={ok:"b-green",warn:"b-amber",bad:"b-red"}, txt={ok:"pass",warn:"review",bad:"fix"};
   $("#dqTbl").innerHTML='<thead><tr><th class="nosort">Check</th><th class="num nosort">Count</th><th class="nosort">Result</th><th class="nosort">Detail</th></tr></thead><tbody>'+
     dq.map(([c,n,s,d])=>`<tr><td>${esc(c)}</td><td class="num">${esc(n)}</td><td><span class="badge ${cls[s]}">${txt[s]}</span></td><td style="white-space:normal">${esc(d)}</td></tr>`).join("")+"</tbody>";
@@ -1768,7 +1766,7 @@ function renderAll(){
   const up=$("#updated"); up.className="updated"+(ok<tot?" warn":"");
   up.textContent=(newest?"Data through "+newest:"No data")+(C.csatAsOf?" · CSAT through "+C.csatAsOf:" · CSAT not uploaded")+` · ${ok} of ${tot} sources loaded`;
   $("#loaded").textContent=`${S.agents.size} agents · ${S.tss.length.toLocaleString()} agent-days · ${S.qa.length.toLocaleString()} evaluations · ${(S.intercom.length+S.qualtrics.length).toLocaleString()} surveys`;
-  $("#footnote").innerHTML=`Scoring: each pillar is one third of the KPI score. Productive % = (Logged In - Non-Productive) ÷ Logged In, same rules as the TSS dashboard. QA = average evaluation score vs the brand goal, counted after ${CONFIG.targets.minQaEvals} evaluations. CSAT = qualifying Intercom + Qualtrics surveys vs ${CONFIG.targets.csatPerQuarter} per quarter, paced on months the CSAT files cover. ${S.settings.method==="passfail"?"Pass/fail: a pillar earns its full third only when the target is met.":"Proportional: a pillar earns its share of the target, capped at 100%."} ${S.settings.missing==="require"?"Agents without Productivity data or enough QA evaluations are not scored.":""}`;
+  $("#footnote").innerHTML=`Scoring: each pillar is one third of the KPI score. Productive % = (Logged In - Non-Productive) ÷ Logged In, same rules as the TSS dashboard. QA = average evaluation score vs the brand goal. CSAT = qualifying Intercom + Qualtrics surveys vs ${CONFIG.targets.csatPerQuarter} per quarter, paced on months the CSAT files cover. ${S.settings.method==="passfail"?"Pass/fail: a pillar earns its full third only when the target is met.":"Proportional: a pillar earns its share of the target, capped at 100%."} ${S.settings.missing==="require"?"Agents without Productivity data or a QA evaluation in the period are not scored.":""}`;
   $("#filterBar").style.display=S.tab==="data"?"none":"flex";
 }
 function switchTab(t){
@@ -1822,7 +1820,7 @@ $("#btnExport").onclick=()=>{
   const n=v=>isFinite(v)?r1(v):"";
   const rows=C.rows.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r=>[r.name,brandName(r.brand),r.coach,r.location,r.trainee?"Yes":"",r.scored?"Scored":"Not enough data",n(r.prodPct),n(r.pts.prod),n(r.qaAvg),r.qa.length,r.qaGoal,n(r.pts.qa),r.ic.length,r.icQual,r.ql.length,r.qlQual,r.csatQual,r.csatTarget,r.csatExpected,r.csatPace,n(r.pts.csat),r.scored?r.met:"",n(r.total)]);
   const meta=[["Support KPI Scorecard · TSS & Keap"],["Period",C.P.label],["Generated",new Date().toLocaleString("en-US")],["Scoring",S.settings.method],["CSAT data through",C.csatAsOf||"not loaded"],
-    ["Targets",`Productive ${T.productive}% · QA TSS ${T.qaThryv}% / Keap ${T.qaKeap}% (${T.minQaEvals}+ evals) · CSAT ${T.csatPerQuarter} per quarter`],[]];
+    ["Targets",`Productive ${T.productive}% · QA TSS ${T.qaThryv}% / Keap ${T.qaKeap}% · CSAT ${T.csatPerQuarter} per quarter`],[]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...meta,head,...rows]),"Scorecard");
   const um=[["Source","Name in Source","Matched To","Method","Rows"],...S.match.map(m=>[m.src,m.raw,m.to,m.method,m.n])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(um),"Name Matching");
