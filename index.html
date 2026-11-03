@@ -23,6 +23,8 @@
   8. KPI ranking with team-average line, plus top five / bottom five.
   9. Agent detail panel: click any agent name or ranking bar.
  10. Dark mode, Inter font loaded, neutral coach colors with an average line, optional team score goal.
+  v2.1
+ 11. QA history: TSS archive (Jan 1 to Sep 14), data/ exports in the QA repos, and evals* files in this repo's data folder.
 -->
 <style>
   :root{
@@ -582,8 +584,15 @@ const CONFIG = {
     // TSS Agent Time: reads every 8x8 export in the tss-agent-time repo's data folder
     tss:      { label:"TSS Agent Time (8x8)", kind:"github-folder", owner:"timramosthryv", repo:"tss-agent-time", path:"data", branch:"main" },
     // QA: the same evals file each QA dashboard already reads
-    thryvQA:  { label:"Thryv Support QA (8x8)", kind:"file", url:"https://raw.githubusercontent.com/timramosthryv/thryv-support-evaluations/main/evals.csv" },
-    keapQA:   { label:"Keap Support QA (8x8)",  kind:"file", url:"https://raw.githubusercontent.com/timramosthryv/keap-support-qa-evaluations/main/evals.csv" },
+    // v2.1: QA = the current evals file, plus frozen archives (evals-archive*.json) and any data/ exports in the same repo,
+    // plus evals*.xlsx/csv files in THIS repo's data folder. Duplicates (Evaluation Date + Agent) count once.
+    thryvQA:  { label:"Thryv Support QA (8x8)", kind:"file", url:"https://raw.githubusercontent.com/timramosthryv/thryv-support-evaluations/main/evals.csv",
+                repo:{owner:"timramosthryv",name:"thryv-support-evaluations",branch:"main"},
+                archives:["https://raw.githubusercontent.com/timramosthryv/thryv-support-evaluations/main/evals-archive-through-2026-09-14.json"] },
+    keapQA:   { label:"Keap Support QA (8x8)",  kind:"file", url:"https://raw.githubusercontent.com/timramosthryv/keap-support-qa-evaluations/main/evals.csv",
+                repo:{owner:"timramosthryv",name:"keap-support-qa-evaluations",branch:"main"}, archives:[] },
+    selfQA:   { repo:{owner:"timramosthryv",name:"supportkpidashboard",branch:"main"}, path:"data",
+                files:["data/evals-2026-09-14-to-2026-09-30.xlsx"] },
     // CSAT + roster: files in THIS repo's data folder
     intercom: { label:"Intercom CSAT", kind:"file", url:"data/intercom.csv" },
     qualtrics:{ label:"Qualtrics Survey", kind:"file", url:"data/qualtrics.csv" },
@@ -929,17 +938,47 @@ function qaFromRows(rows, brandForced){
     const coachQA = brand==="Keap" ? "" : (grp.split(" ").slice(1).join(" ")||grp);
     // v2: score kept unrounded; rounding happens only for display
     out.push({agent,score,brand,group:grp,coachQA,channel:channelFrom(cT>=0?row[cT]:""),
-      evaluator:cE>=0?String(row[cE]||""):"", date:toISO(row[cD]), txn:cX>=0?String(row[cX]||"").trim():"",
+      evaluator:cE>=0?String(row[cE]||""):"", date:toISO(row[cD]), stamp:String(row[cD]??"").trim(), txn:cX>=0?String(row[cX]||"").trim():"",
       template:cT>=0?String(row[cT]||""):""});
   }
   return out;
 }
+/* v2.1: QA history beyond the current evals file */
+async function listRepo(repo,path){
+  try{ const r=await fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${path}?ref=${repo.branch}`,{cache:"no-store",headers:{Accept:"application/vnd.github+json"}});
+    if(!r.ok) return []; const j=await r.json(); return Array.isArray(j)?j:[]; }catch(e){ return []; }
+}
+// Frozen 8x8 archive (compact JSON): columns listed in dictCols hold indexes into dicts. Rebuild plain rows.
+function archiveToRows(j){
+  const dc=new Set((j.dictCols||[]).map(Number));
+  return [j.header, ...j.rows.map(row=>row.map((v,i)=>dc.has(i)?((j.dicts[String(i)]||[])[v]??""):v))];
+}
 async function loadQA(which){
-  const c=CONFIG.sources[which]; const rows=bufToRows(await fetchBuf(c.url));
-  const recs=qaFromRows(rows, which==="keapQA"?"Keap":"Thryv");
-  S.qa=S.qa.filter(r=>r.brand!==(which==="keapQA"?"Keap":"Thryv")).concat(recs);
+  const c=CONFIG.sources[which], brand=which==="keapQA"?"Keap":"Thryv";
+  const parts=[], used=[];
+  let archiveUrls=[...(c.archives||[])], monthly=[];
+  if(c.repo){
+    const [root,data]=await Promise.all([listRepo(c.repo,""),listRepo(c.repo,"data")]);
+    root.filter(f=>/^evals-archive.*\.json$/i.test(f.name)).forEach(f=>{ if(!archiveUrls.some(u=>decodeURIComponent(u).endsWith("/"+f.name))) archiveUrls.push(f.download_url); });
+    monthly=data.filter(f=>/\.(csv|xlsx?)$/i.test(f.name));
+  }
+  // 1. frozen archives
+  for(const u of archiveUrls){ try{ const r=await fetch(u+(u.includes("?")?"&":"?")+"t="+Date.now(),{cache:"no-store"}); if(!r.ok) continue;
+    parts.push(qaFromRows(archiveToRows(await r.json()),brand)); used.push(decodeURIComponent(u.split("/").pop())); }catch(e){} }
+  // 2. exports in that repo's data/ folder
+  for(const f of monthly.sort((a,b)=>a.name.localeCompare(b.name))){ try{ parts.push(qaFromRows(bufToRows(await fetchBuf(f.download_url)),brand)); used.push("data/"+f.name); }catch(e){} }
+  // 3. evals*.xlsx/csv in this Scorecard repo's own data/ folder (rows kept only for this brand, by Main group)
+  { const sq=CONFIG.sources.selfQA; if(sq){
+      const found=(await listRepo(sq.repo,sq.path)).filter(f=>/^evals.*\.(csv|xlsx?)$/i.test(f.name)).map(f=>sq.path+"/"+f.name);
+      for(const p of [...new Set([...(sq.files||[]),...found])].sort()){ try{ const recs=qaFromRows(bufToRows(await fetchBuf(p))).filter(r=>r.brand===brand);
+        if(recs.length){ parts.push(recs); used.push(p+" (this repo)"); } }catch(e){} } } }
+  // 4. the current evals file last, so it wins on duplicates
+  parts.push(qaFromRows(bufToRows(await fetchBuf(c.url)),brand)); used.push(decodeURIComponent(c.url.split("/").pop()));
+  const m=new Map(); parts.forEach(p=>p.forEach(r=>m.set((r.stamp||r.date)+"|"+norm(r.agent),r)));
+  const recs=[...m.values()];
+  S.qa=S.qa.filter(r=>r.brand!==brand).concat(recs);
   const ds=recs.map(r=>r.date).filter(Boolean).sort();
-  return {rows:recs.length, note:ds.length?("Evaluations "+ds[0]+" to "+ds[ds.length-1]):""};
+  return {rows:recs.length, files:used.length, note:(ds.length?("Evaluations "+ds[0]+" to "+ds[ds.length-1]):"")+" · Files: "+used.join(", ")};
 }
 
 /* =====================================================================
