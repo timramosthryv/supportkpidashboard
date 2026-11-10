@@ -25,6 +25,9 @@
  10. Dark mode, Inter font loaded, neutral coach colors with an average line, optional team score goal.
   v2.1
  11. QA history: TSS archive (Jan 1 to Sep 14), data/ exports in the QA repos, and evals* files in this repo's data folder.
+  v2.2
+ 12. Bottom five removed (agents can see this page). Top five kept.
+ 13. CSAT pillar card: shows the agent's own qualifying survey count when one agent is in view; otherwise says "agents at goal".
 -->
 <style>
   :root{
@@ -313,11 +316,8 @@
         </div>
       </div>
     </div>
-    <!-- v2: top five / bottom five -->
-    <div class="grid2e">
-      <div class="panel"><h2>Top five</h2><p class="pdesc" id="topNote"></p><div class="tblwrap"><table id="topTbl"></table></div></div>
-      <div class="panel"><h2>Bottom five</h2><p class="pdesc" id="botNote"></p><div class="tblwrap"><table id="botTbl"></table></div></div>
-    </div>
+    <!-- v2.2: top five only (bottom five removed because agents can see this page) -->
+    <div class="panel"><h2>Top five</h2><p class="pdesc" id="topNote"></p><div class="tblwrap"><table id="topTbl"></table></div></div>
     <div class="panel">
       <h2>Agent Scorecard</h2>
       <p class="pdesc" id="scoreHint">Click a header to sort.</p>
@@ -1457,8 +1457,12 @@ function renderScore(C){
       fill:qaAgents.length?metQA/qaAgents.length:0,
       delta:prevT?qaDelta(curT,prevT,PP.label):"",
       spark:sparkSVG(W.qa,css("--qa"),"Weekly QA average")},
-    {t:"CSAT",c:"--csat",v:NP===3?`${metCS} <span class="small">at goal</span> · ${onPace} <span class="small">on pace</span>`:"Waiting on upload",
-      d:`${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys (Intercom + Qualtrics) · ${rows[0]?rows[0].csatExpected:0} expected so far · ${asOfTxt}`,
+    // v2.2: with one agent in view, show that agent's own survey count instead of a count of agents
+    (rows.length===1&&NP===3)?{t:"CSAT",c:"--csat",v:`${rows[0].csatQual} <span class="small">qualifying</span> · ${rows[0].csatPace}`,
+      d:`Goal ${rows[0].csatTarget} · ${rows[0].csatExpected} expected so far · ${rows[0].icQual} Intercom (Great or Amazing) + ${rows[0].qlQual} Qualtrics (9 or 10) · ${asOfTxt}`,
+      fill:Math.min(1,rows[0].csatQual/(rows[0].csatTarget||1)),delta:"",spark:sparkSVG(W.csat,css("--csat"),"Weekly qualifying Intercom ratings")}:
+    {t:"CSAT",c:"--csat",v:NP===3?`${metCS} <span class="small">agents at goal</span> · ${onPace} <span class="small">on pace</span>`:"Waiting on upload",
+      d:`Goal: ${rows[0]?rows[0].csatTarget:T.csatPerQuarter} qualifying surveys per agent (Intercom + Qualtrics) · ${rows[0]?rows[0].csatExpected:0} expected so far · ${asOfTxt}`,
       fill:roll.length?metCS/roll.length:0,delta:"",spark:sparkSVG(W.csat,css("--csat"),"Weekly qualifying Intercom ratings")},
   ];
   $("#pillars").innerHTML=P.map(p=>`<div class="pillar" style="border-top-color:var(${p.c})"><span class="pw">33.3%</span><div class="klabel">${p.t}</div>
@@ -1497,9 +1501,8 @@ function renderScore(C){
     (list.length?list.map(([r,i])=>`<tr><td>${i}</td><td>${agentLink(r)}</td><td>${esc(r.coach)}</td><td class="num">${r.met} / ${NP}</td><td class="num score-cell" style="color:${scoreColor(r.total)}">${r1(r.total).toFixed(1)}</td></tr>`).join("")
       :`<tr><td colspan="5" class="empty">No scored agents in the current view.</td></tr>`)+"</tbody>"; };
   rk("#topTbl",elig.slice(0,5).map((r,i)=>[r,i+1]));
-  rk("#botTbl",elig.slice(-5).reverse().map((r,i)=>[r,elig.length-i]));
   const rn=`Scored agents, not in training (${elig.length}). Ties are broken by how far each agent is above target across the pillars.`;
-  $("#topNote").textContent=rn; $("#botNote").textContent=rn;
+  $("#topNote").textContent=rn;
   // table
   rows.forEach(r=>{ r.csatSort=r.csatQual; });
   const shown=act?rows.filter(r=>act.f(r,NP)):rows;
