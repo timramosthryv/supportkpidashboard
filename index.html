@@ -1084,11 +1084,16 @@ async function loadAll(){
 /* =====================================================================
    MODEL: canonical agents + source records tagged with agent key
    ===================================================================== */
+/* Training status for a selected period. An agent counts as "In Training" only while still inside the window
+   at the end of the selection (capped at today). Once the window closes, the agent leaves training, and only
+   data from the day after Training End counts toward the coach and team. Training-day data is left out. */
+const trainingEndFor = a => { if(!a) return ""; if(a.trainingEnd) return a.trainingEnd;
+  return TRAINING_AGENTS.some(n=>norm(n)===a.key) ? TRAINING_END : ""; };
 const isTrainee = (a, startDate, endDate) => {
-  if(!a) return false;
-  if(a.trainingEnd) return a.trainingEnd >= (startDate||"0000");
-  const inList=TRAINING_AGENTS.some(n=>norm(n)===a.key);
-  return inList && TRAINING_END >= (startDate||"0000") && TRAINING_START <= (endDate||"9999");
+  const te=trainingEndFor(a); if(!te) return false;
+  if(!a.trainingEnd && TRAINING_START > (endDate||"9999")) return false;
+  const t=todayISO(), asOf=(endDate && endDate<t) ? endDate : t;
+  return te >= asOf;
 };
 const trainingDay = (a,d) => { if(!a) return false; if(a.trainingEnd) return d<=a.trainingEnd;
   return TRAINING_AGENTS.some(n=>norm(n)===a.key) && d>=TRAINING_START && d<=TRAINING_END; };
@@ -1251,10 +1256,14 @@ function compute(Pin){
   const rows=new Map();
   const get=key=>{ let r=rows.get(key); if(!r){ const a=S.agents.get(key); r={a,key,name:a.name,brand:a.brand,coach:a.coach,location:a.location,
     login:0,prod:0,days:0,qa:[],ic:[],ql:[],trainee:false}; rows.set(key,r);} return r; };
-  S.tss.forEach(x=>{ if(!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; const r=get(a.key); r.login+=x.loggedin; r.prod+=x.prod; if(x.loggedin>0) r.days++; });
-  S.qa.forEach(x=>{ if(!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).qa.push(x); });
-  S.intercom.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).ic.push(x); });
-  S.qualtrics.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)) return; get(a.key).ql.push(x); });
+  // Agents who have left training in this period: their training-day records are left out, so only
+  // post-training results count toward the agent score and the coach and team rollups.
+  const gradMemo=new Map(), grad=a=>{ if(!gradMemo.has(a.key)) gradMemo.set(a.key,!!trainingEndFor(a)&&!isTrainee(a,P.start,P.end)); return gradMemo.get(a.key); };
+  const skip=(a,d)=>grad(a)&&trainingDay(a,d);
+  S.tss.forEach(x=>{ if(!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)||skip(a,x.date)) return; const r=get(a.key); r.login+=x.loggedin; r.prod+=x.prod; if(x.loggedin>0) r.days++; });
+  S.qa.forEach(x=>{ if(!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)||skip(a,x.date)) return; get(a.key).qa.push(x); });
+  S.intercom.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)||skip(a,x.date)) return; get(a.key).ic.push(x); });
+  S.qualtrics.forEach(x=>{ if(!x.akey||!P.has(x.date)) return; const a=S.agents.get(x.akey); if(!agentPass(a)||skip(a,x.date)) return; get(a.key).ql.push(x); });
   S.roster.forEach(rr=>{ const a=S.agents.get(norm(rr.name)); if(agentPass(a)) get(a.key); });
   const csatTarget = Math.max(1, P.months.length) * T.csatPerMonth;
   /* v2: expected so far = completed months in the selection, judged against the latest CSAT data date.
@@ -1674,7 +1683,7 @@ function renderData(){
   $("#targetsNote").innerHTML=`<b>Targets in use</b> (edit the CONFIG block in index.html to change): Productive ${T.productive}% · QA TSS ${T.qaThryv}% · QA Keap ${T.qaKeap}% · CSAT ${T.csatPerQuarter} qualifying per quarter, ${T.csatPerMonth} per month pacing · weights 33.3% each · Team score goal: ${T.teamScoreGoal==null?"not set":T.teamScoreGoal}.<br>
     <b>CSAT pacing</b>: counts months the CSAT files fully cover (${csatAsOf()?"currently through "+csatAsOf():"no CSAT file loaded"}), so pacing waits for your next export instead of penalizing agents for a month that has not been uploaded.<br>
     <b>Brand (TSS vs Keap)</b>: taken from each agent's most recent group in TSS Agent Time (Keap Support = Keap, every DR and Delhi group = TSS). Agents not in TSS Agent Time fall back to the QA file they appear in. A roster file, once added, overrides both.<br>
-    <b>Training window</b>: ${TRAINING_START} to ${TRAINING_END} for ${TRAINING_AGENTS.length} agents carried over from the TSS dashboard. Add a <i>Training End</i> date in the roster to manage this per agent.`;
+    <b>Training window</b>: ${TRAINING_START} to ${TRAINING_END} for ${TRAINING_AGENTS.length} agents carried over from the TSS dashboard. Add a <i>Training End</i> date in the roster to manage this per agent. Once an agent's Training End has passed, they are no longer shown as In Training, and their results count toward their coach and the team starting the next day. Results from training days stay out of the score.`;
   // v2: data checks
   const C=compute(); const dq=[];
   const dupMap=new Map(); S.qa.filter(x=>x.txn).forEach(x=>{ const k=x.brand+"|"+x.txn+"|"+norm(x.agent)+"|"+x.template; dupMap.set(k,(dupMap.get(k)||0)+1); });
